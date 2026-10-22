@@ -1,11 +1,21 @@
 import Link from "next/link";
-import { Header } from "@/components/Header";
-import { Footer } from "@/components/Footer";
 
 export default function NotFound() {
   return (
     <>
-      <Header />
+      <header className="masthead">
+        <div className="masthead-inner">
+          <nav className="mast-nav" aria-label="主選單">
+            <Link href="/">商品</Link>
+          </nav>
+          <Link href="/" className="wordmark" aria-label="Radiant">
+            Radiant
+          </Link>
+          <div className="mast-tools">
+            <Link href="/cart">購物袋</Link>
+          </div>
+        </div>
+      </header>
       <main className="page">
         <div className="empty" style={{ padding: "160px 0" }}>
           <span className="eyebrow">404</span>
@@ -15,7 +25,6 @@ export default function NotFound() {
           </Link>
         </div>
       </main>
-      <Footer />
     </>
   );
 }

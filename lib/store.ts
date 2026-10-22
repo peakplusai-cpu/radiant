@@ -114,7 +114,13 @@ async function supabaseMutate<T>(fn: (store: Store) => T | Promise<T>): Promise<
 
 // ---------- public API ----------
 
+function isBuildPhase(): boolean {
+  return process.env.NEXT_PHASE === "phase-production-build";
+}
+
 export async function getStore(): Promise<Store> {
+  // `next build` prerenders /_not-found; never talk to Supabase in that phase.
+  if (isBuildPhase()) return normalize({});
   if (supabaseConfigured()) return supabaseGet();
   return readFile();
 }

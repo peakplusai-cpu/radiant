@@ -25,6 +25,8 @@ const serifTc = Noto_Serif_TC({
   preload: false,
 });
 
+export const dynamic = "force-dynamic";
+
 export async function generateMetadata(): Promise<Metadata> {
   const { settings } = await getStore();
   return {
