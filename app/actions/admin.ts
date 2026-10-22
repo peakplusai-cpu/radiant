@@ -10,7 +10,7 @@ import {
   isAuthenticated,
   verifyPassword,
 } from "@/lib/auth";
-import { getStore, mutate } from "@/lib/store";
+import { getStore, mutate, StorageError } from "@/lib/store";
 import { uid } from "@/lib/id";
 import { changeOrder } from "@/lib/orders";
 import { pushLine } from "@/lib/line";
@@ -36,9 +36,14 @@ export async function setupAdmin(_prev: string, form: FormData): Promise<string>
   const password = str(form, "password", 200);
   if (password.length < 8) return "密碼至少需要 8 個字元";
   if (password !== str(form, "confirm", 200)) return "兩次輸入的密碼不一致";
-  await mutate((s) => {
-    s.admin = { passwordHash: hashPassword(password), createdAt: new Date().toISOString() };
-  });
+  try {
+    await mutate((s) => {
+      s.admin = { passwordHash: hashPassword(password), createdAt: new Date().toISOString() };
+    });
+  } catch (err) {
+    if (err instanceof StorageError) return err.message;
+    throw err;
+  }
   await createAdminSession();
   redirect("/admin");
 }

@@ -39,7 +39,17 @@ function normalize(parsed: Partial<Store>): Store {
 
 // ---------- local JSON file (development / single server with a disk) ----------
 
+export class StorageError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "StorageError";
+  }
+}
+
 function persistFile(store: Store): void {
+  if (process.env.VERCEL) {
+    throw new StorageError("Vercel 無法儲存資料。請在此專案設定 SUPABASE_URL 與 SUPABASE_SERVICE_ROLE_KEY。");
+  }
   mkdirSync(dirname(STORE_PATH), { recursive: true });
   const tmp = `${STORE_PATH}.${process.pid}.${Date.now()}.tmp`;
   writeFileSync(tmp, JSON.stringify(store, null, 2), "utf8");
@@ -48,9 +58,7 @@ function persistFile(store: Store): void {
 
 function readFile(): Store {
   if (!existsSync(STORE_PATH)) {
-    const fresh = normalize({});
-    persistFile(fresh);
-    return fresh;
+    return normalize({});
   }
   return normalize(JSON.parse(readFileSync(STORE_PATH, "utf8")) as Partial<Store>);
 }
