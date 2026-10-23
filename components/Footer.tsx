@@ -1,10 +1,14 @@
 import Link from "next/link";
 import { getStore } from "@/lib/store";
+import { officialLineHref } from "@/lib/line-link";
+import { LineButton } from "./LineButton";
 
 export async function Footer() {
   const { settings } = await getStore();
+  const lineHref = officialLineHref(settings);
   const oaLabel = settings.lineOaName || "LINE 官方帳號";
   return (
+    <>
     <footer className="footer">
       <div className="footer-grid">
         <div>
@@ -31,15 +35,9 @@ export async function Footer() {
         <div>
           <h4>LINE</h4>
           <ul>
-            {settings.lineOaUrl ? (
-              <li>
-                <a href={settings.lineOaUrl} target="_blank" rel="noreferrer" className="link">
-                  加入 {oaLabel}
-                </a>
-              </li>
-            ) : (
-              <li>{oaLabel}</li>
-            )}
+            <li>
+              {lineHref ? <LineButton href={lineHref} /> : oaLabel}
+            </li>
             {settings.lineOaBasicId && <li>{settings.lineOaBasicId}</li>}
           </ul>
         </div>
@@ -51,5 +49,7 @@ export async function Footer() {
         </Link>
       </div>
     </footer>
+      <LineButton href={lineHref} floating />
+    </>
   );
 }
