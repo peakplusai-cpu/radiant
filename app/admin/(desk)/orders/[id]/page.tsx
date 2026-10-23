@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getStore } from "@/lib/store";
 import { updateOrder } from "@/app/actions/admin";
 import { OrderReceipt } from "@/components/OrderReceipt";
+import { CancelOrderButton } from "@/components/admin/CancelOrderButton";
 import { ORDER_STATUS_LABEL, ORDER_STATUSES, OPEN_STATUSES } from "@/lib/format";
 
 export default async function OrderAdmin({
@@ -10,10 +11,10 @@ export default async function OrderAdmin({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ updated?: string }>;
+  searchParams: Promise<{ updated?: string; cancelled?: string }>;
 }) {
   const { id } = await params;
-  const { updated } = await searchParams;
+  const { updated, cancelled } = await searchParams;
   const { orders, customers } = await getStore();
   const order = orders.find((o) => o.id === id);
   if (!order) notFound();
@@ -34,6 +35,7 @@ export default async function OrderAdmin({
         </Link>
       </div>
       {updated && <div className="notice" style={{ marginBottom: 24 }}>訂單已更新。</div>}
+      {cancelled && <div className="notice" style={{ marginBottom: 24 }}>訂單已取消，庫存已加回商品。</div>}
 
       <div className="form-grid">
         <OrderReceipt order={order} />
@@ -74,28 +76,41 @@ export default async function OrderAdmin({
 
           <section className="panel">
             <h2>處理訂單</h2>
-            <form action={updateOrder}>
-              <input type="hidden" name="id" value={order.id} />
-              {locked && <input type="hidden" name="status" value="cancelled" />}
-              <label className="field">
-                <span className="label">狀態</span>
-                <select className="select" name="status" defaultValue={order.status} disabled={locked}>
-                  {ORDER_STATUSES.map((s) => (
-                    <option key={s} value={s}>
-                      {ORDER_STATUS_LABEL[s]}
-                    </option>
-                  ))}
-                </select>
-                <span className="hint">改為「已取消」會自動把庫存加回去；取消後無法恢復。</span>
-              </label>
-              <label className="field">
-                <span className="label">內部備註</span>
-                <textarea className="textarea" name="internalNote" defaultValue={order.internalNote} maxLength={500} />
-              </label>
-              <button className="btn solid" style={{ marginBottom: 28 }}>
-                儲存
-              </button>
-            </form>
+            {locked ? (
+              <p style={{ color: "var(--muted)", marginTop: 0 }}>此單已取消，庫存已歸還。無法恢復。</p>
+            ) : (
+              <form action={updateOrder}>
+                <input type="hidden" name="id" value={order.id} />
+                <label className="field">
+                  <span className="label">狀態</span>
+                  <select className="select" name="status" defaultValue={order.status}>
+                    {ORDER_STATUSES.filter((s) => s !== "cancelled").map((s) => (
+                      <option key={s} value={s}>
+                        {ORDER_STATUS_LABEL[s]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span className="label">內部備註</span>
+                  <textarea className="textarea" name="internalNote" defaultValue={order.internalNote} maxLength={500} />
+                </label>
+                <button className="btn solid" style={{ marginBottom: 20 }}>
+                  儲存
+                </button>
+              </form>
+            )}
+            {order.internalNote && locked && (
+              <p style={{ whiteSpace: "pre-wrap", fontSize: 14 }}>{order.internalNote}</p>
+            )}
+            {!locked && order.status !== "completed" && (
+              <div style={{ paddingTop: 8, borderTop: "1px solid var(--teal-soft)", marginBottom: 20 }}>
+                <p style={{ fontSize: 13, color: "var(--muted)", margin: "16px 0 12px" }}>
+                  取消後無法恢復，商品庫存會自動加回。
+                </p>
+                <CancelOrderButton orderId={order.id} code={order.code} warnShipped={order.status === "shipped"} />
+              </div>
+            )}
           </section>
         </div>
       </div>

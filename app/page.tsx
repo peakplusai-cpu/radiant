@@ -50,24 +50,6 @@ export default async function HomePage({
     <>
       <Header />
       <main className="page">
-        <section className="intro">
-          <div>
-            <span className="eyebrow">Collection</span>
-            <h1>
-              {settings.shopName === "Radiant" ? (
-                <>
-                  Quietly
-                  <br />
-                  <em>radiant</em>
-                </>
-              ) : (
-                settings.shopName
-              )}
-            </h1>
-          </div>
-          <p>{settings.tagline || "精選商品，現正販售。"}</p>
-        </section>
-
         <div className="toolbar">
           <nav className="sortbar" aria-label="排序">
             {TABS.map((tab) => {

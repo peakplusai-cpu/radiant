@@ -323,6 +323,22 @@ h3 {
   color: var(--ink);
 }
 
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.wordmark-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: none;
+  box-shadow: 0 0 0 1px var(--teal-soft);
+  padding-left: 0;
+}
+
 .bag-count {
   display: inline-block;
   min-width: 18px;
@@ -339,37 +355,8 @@ h3 {
   padding: 0 var(--gutter);
 }
 
-.intro {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--gutter);
-  align-items: end;
-  padding: clamp(56px, 9vw, 120px) 0 clamp(36px, 5vw, 64px);
-}
-
-.intro h1 {
-  font-family: var(--display);
-  font-weight: 400;
-  font-size: clamp(44px, 7.4vw, 108px);
-  line-height: 0.98;
-  letter-spacing: -0.01em;
-  margin-top: 22px;
-}
-
-.intro h1 em {
-  font-style: italic;
-  color: var(--teal-deep);
-}
-
-.intro p {
-  margin: 0;
-  max-width: 34em;
-  color: var(--muted);
-  font-size: 15px;
-  justify-self: end;
-}
-
 .toolbar {
+  margin-top: clamp(28px, 4vw, 48px);
   border-top: 1px solid var(--teal);
   border-bottom: 1px solid var(--teal-soft);
   display: flex;
@@ -1767,13 +1754,6 @@ h3 {
     gap: 14px;
     font-size: 11px;
   }
-  .intro {
-    grid-template-columns: 1fr;
-    align-items: start;
-  }
-  .intro p {
-    justify-self: start;
-  }
   .grid {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -1823,6 +1803,11 @@ h3 {
     font-size: 18px;
     letter-spacing: 0.3em;
     padding-left: 0.3em;
+    gap: 8px;
+  }
+  .wordmark-mark {
+    width: 26px;
+    height: 26px;
   }
   .mast-nav a.hide-sm {
     display: none;

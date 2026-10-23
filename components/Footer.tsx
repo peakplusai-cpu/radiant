@@ -8,7 +8,10 @@ export async function Footer() {
     <footer className="footer">
       <div className="footer-grid">
         <div>
-          <div className="wordmark">{settings.shopName}</div>
+          <div className="wordmark">
+            <img src="/logo-mark.png" alt="" className="wordmark-mark" width={36} height={36} />
+            <span>{settings.shopName}</span>
+          </div>
           {settings.tagline && <p>{settings.tagline}</p>}
         </div>
         <div>

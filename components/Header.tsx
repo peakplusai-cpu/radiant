@@ -14,7 +14,8 @@ export async function Header() {
             <Link href="/orders">我的訂單</Link>
           </nav>
           <Link href="/" className="wordmark" aria-label={settings.shopName}>
-            {settings.shopName}
+            <img src="/logo-mark.png" alt="" className="wordmark-mark" width={36} height={36} />
+            <span>{settings.shopName}</span>
           </Link>
           <div className="mast-tools">
             <Link href="/cart">
