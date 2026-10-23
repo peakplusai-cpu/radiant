@@ -149,6 +149,17 @@ h3 {
   background: #fbf1ef;
 }
 
+.btn.danger.solid {
+  background: var(--alert);
+  border-color: var(--alert);
+  color: #fff;
+}
+
+.btn.danger.solid:hover:not(:disabled) {
+  background: #8a352c;
+  border-color: #8a352c;
+}
+
 .link {
   color: var(--teal-deep);
   border-bottom: 1px solid var(--teal);

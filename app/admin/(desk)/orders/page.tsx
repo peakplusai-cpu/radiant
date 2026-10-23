@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getStore } from "@/lib/store";
 import { formatDate, formatPrice, ORDER_STATUS_LABEL, ORDER_STATUSES, OPEN_STATUSES } from "@/lib/format";
+import { CancelOrderButton } from "@/components/admin/CancelOrderButton";
 import type { OrderStatus } from "@/lib/types";
 
 export default async function OrdersAdmin({ searchParams }: { searchParams: Promise<{ status?: string; q?: string }> }) {
@@ -54,6 +55,7 @@ export default async function OrdersAdmin({ searchParams }: { searchParams: Prom
               <th>時間</th>
               <th>狀態</th>
               <th className="right">金額</th>
+              <th />
             </tr>
           </thead>
           <tbody>
@@ -94,6 +96,11 @@ export default async function OrdersAdmin({ searchParams }: { searchParams: Prom
                     </span>
                   </td>
                   <td className="num right">{formatPrice(o.total)}</td>
+                  <td>
+                    {o.status !== "cancelled" && o.status !== "completed" && (
+                      <CancelOrderButton orderId={o.id} code={o.code} compact />
+                    )}
+                  </td>
                 </tr>
               );
             })}

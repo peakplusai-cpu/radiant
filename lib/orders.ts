@@ -157,13 +157,17 @@ export async function changeOrder(
   id: string,
   status: OrderStatus,
   internalNote: string
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; order?: Order; stockRestored?: boolean; customer?: Customer }> {
   return mutate((store) => {
     const order = store.orders.find((o) => o.id === id);
     if (!order) return { ok: false, error: "找不到訂單" };
     if (order.status === "cancelled" && status !== "cancelled") {
       return { ok: false, error: "已取消的訂單無法恢復" };
     }
+    if (order.status === "completed" && status === "cancelled") {
+      return { ok: false, error: "已完成的訂單無法取消" };
+    }
+    let stockRestored = false;
     if (status === "cancelled" && order.status !== "cancelled") {
       for (const item of order.items) {
         const product = store.products.find((p) => p.id === item.productId);
@@ -171,10 +175,12 @@ export async function changeOrder(
         if (variant) variant.stock += item.qty;
         if (product) product.sold = Math.max(0, product.sold - item.qty);
       }
+      stockRestored = true;
     }
     order.status = status;
     order.internalNote = internalNote;
     order.updatedAt = new Date().toISOString();
-    return { ok: true };
+    const customer = store.customers.find((c) => c.id === order.customerId);
+    return { ok: true, order, stockRestored, customer };
   });
 }

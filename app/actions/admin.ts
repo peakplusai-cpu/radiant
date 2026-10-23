@@ -160,11 +160,42 @@ export async function deleteProduct(form: FormData): Promise<void> {
 export async function updateOrder(form: FormData): Promise<void> {
   await guard();
   const status = str(form, "status", 20) as OrderStatus;
-  if (!ORDER_STATUSES.includes(status)) return;
+  if (!ORDER_STATUSES.includes(status) || status === "cancelled") return;
   const id = str(form, "id", 80);
   await changeOrder(id, status, str(form, "internalNote", 500));
   revalidatePath("/admin", "layout");
   redirect(`/admin/orders/${id}?updated=1`);
+}
+
+export async function cancelOrder(form: FormData): Promise<void> {
+  await guard();
+  const id = str(form, "id", 80);
+  const reason = str(form, "reason", 300);
+  const { orders } = await getStore();
+  const current = orders.find((o) => o.id === id);
+  const note = [current?.internalNote, reason ? `取消原因：${reason}` : "賣家取消訂單"]
+    .filter(Boolean)
+    .join("\n");
+  const result = await changeOrder(id, "cancelled", note);
+  if (result.ok && result.order) {
+    const lines = result.order.items.map((i) => `· ${i.name} ${i.color} × ${i.qty}`).join("\n");
+    const who = result.customer
+      ? `${result.customer.lineName}${result.customer.lineId ? `（${result.customer.lineId}）` : ""}`
+      : "";
+    const { settings } = await getStore();
+    if (settings.notifyTo) {
+      void pushLine(settings.notifyTo, `訂單 ${result.order.code} 已取消\n${who}\n${lines}${reason ? `\n原因：${reason}` : ""}`);
+    }
+    if (result.customer?.lineUserId) {
+      void pushLine(
+        result.customer.lineUserId,
+        `您的 Radiant 訂單 ${result.order.code} 已取消。\n${lines}${reason ? `\n${reason}` : ""}\n庫存已釋出，歡迎再選購。`
+      );
+    }
+  }
+  revalidatePath("/", "layout");
+  revalidatePath("/admin", "layout");
+  redirect(`/admin/orders/${id}?cancelled=1`);
 }
 
 export async function shipAllForCustomer(form: FormData): Promise<void> {
