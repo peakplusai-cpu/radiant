@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const ITEMS = [
   { href: "/admin", label: "總覽", exact: true },
   { href: "/admin/products", label: "商品" },
+  { href: "/admin/wall", label: "動態牆" },
   { href: "/admin/orders", label: "訂單" },
   { href: "/admin/customers", label: "客戶" },
   { href: "/admin/settings", label: "設定" },

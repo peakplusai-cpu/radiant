@@ -72,6 +72,12 @@ export type Order = {
   updatedAt: string;
 };
 
+export type WallPhoto = {
+  id: string;
+  src: string;
+  productId: string;
+};
+
 export type Settings = {
   secret: string;
   shopName: string;
@@ -97,4 +103,5 @@ export type Store = {
   products: Product[];
   customers: Customer[];
   orders: Order[];
+  wallPhotos: WallPhoto[];
 };

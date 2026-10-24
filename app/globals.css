@@ -366,6 +366,71 @@ h3 {
   flex-wrap: wrap;
 }
 
+.toolbar.flush {
+  margin-top: 0;
+}
+
+.wall {
+  border-bottom: 1px solid var(--teal);
+  background: #fff;
+}
+
+.wall-viewport {
+  overflow: hidden;
+}
+
+.wall-track {
+  display: flex;
+  width: max-content;
+  animation: wall-marquee var(--wall-duration, 40s) linear infinite;
+}
+
+.wall:hover .wall-track,
+.wall:active .wall-track {
+  animation-play-state: paused;
+}
+
+.wall-set {
+  display: flex;
+}
+
+.wall-item {
+  flex: none;
+  display: block;
+  width: min(240px, 42vw);
+  height: 300px;
+  margin-right: 8px;
+  overflow: hidden;
+  background: var(--teal-wash);
+}
+
+.wall-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@keyframes wall-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wall-track {
+    animation: none;
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .wall-set[aria-hidden="true"] {
+    display: none;
+  }
+}
+
 .sortbar {
   display: flex;
   align-items: stretch;
@@ -1589,6 +1654,32 @@ h3 {
   background: var(--teal-wash);
 }
 
+.wall-admin {
+  align-items: start;
+}
+
+.wall-tile {
+  display: grid;
+  gap: 8px;
+}
+
+.wall-tile .select {
+  font-size: 13px;
+  padding: 8px 10px;
+}
+
+.wall-from-product {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.wall-from-product .select {
+  max-width: 360px;
+}
+
 .toggle {
   display: flex;
   align-items: center;
@@ -1796,6 +1887,11 @@ h3 {
 }
 
 @media (max-width: 520px) {
+  .wall-item {
+    height: 200px;
+    width: 150px;
+    margin-right: 6px;
+  }
   .masthead-inner {
     padding: 0 18px;
   }

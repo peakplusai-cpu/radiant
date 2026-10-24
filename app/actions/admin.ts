@@ -15,6 +15,7 @@ import { uid } from "@/lib/id";
 import { changeOrder } from "@/lib/orders";
 import { pushLine } from "@/lib/line";
 import { OPEN_STATUSES, ORDER_STATUSES } from "@/lib/format";
+import { sanitizeWall } from "@/lib/wall";
 import type { Detail, OrderStatus, Product, Variant } from "@/lib/types";
 
 async function guard(): Promise<void> {
@@ -245,6 +246,27 @@ export async function saveSettings(_prev: string, form: FormData): Promise<strin
     if (form.get("clearMessagingToken") === "on") st.messagingToken = "";
   });
   revalidatePath("/", "layout");
+  return "已儲存";
+}
+
+export async function saveWall(_prev: string, form: FormData): Promise<string> {
+  await guard();
+  let photos;
+  try {
+    photos = JSON.parse(str(form, "photos", 40_000) || "[]");
+  } catch {
+    return "資料格式不正確";
+  }
+  try {
+    await mutate((s) => {
+      s.wallPhotos = sanitizeWall(photos);
+    });
+  } catch (err) {
+    if (err instanceof StorageError) return err.message;
+    throw err;
+  }
+  revalidatePath("/", "layout");
+  revalidatePath("/admin/wall");
   return "已儲存";
 }
 

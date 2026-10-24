@@ -3,6 +3,7 @@ import { dirname, join } from "path";
 import { randomBytes } from "crypto";
 import type { Settings, Store } from "./types";
 import { supabaseAdmin, supabaseConfigured } from "./supabase";
+import { sanitizeWall } from "./wall";
 
 const STORE_PATH = process.env.RADIANT_DATA_FILE || join(process.cwd(), "data", "store.json");
 const TABLE = "radiant_store";
@@ -34,6 +35,7 @@ function normalize(parsed: Partial<Store>): Store {
     products: parsed.products ?? [],
     customers: parsed.customers ?? [],
     orders: parsed.orders ?? [],
+    wallPhotos: sanitizeWall(parsed.wallPhotos),
   };
 }
 

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import { PhotoWall } from "@/components/PhotoWall";
 import { ProductCard } from "@/components/ProductCard";
 import { getStore } from "@/lib/store";
 import { parseSort, sortProducts, type SortKey } from "@/lib/sort";
@@ -32,7 +33,7 @@ export default async function HomePage({
   const sort = parseSort(sp.sort);
   const q = (sp.q ?? "").trim();
   const cat = (sp.cat ?? "").trim();
-  const { products, settings } = await getStore();
+  const { products, wallPhotos } = await getStore();
 
   const listed = products.filter((p) => p.status === "listed");
   const categories = [...new Set(listed.map((p) => p.category).filter(Boolean))];
@@ -49,8 +50,9 @@ export default async function HomePage({
   return (
     <>
       <Header />
+      <PhotoWall photos={wallPhotos} products={products} />
       <main className="page">
-        <div className="toolbar">
+        <div className={`toolbar${wallPhotos.length ? " flush" : ""}`}>
           <nav className="sortbar" aria-label="排序">
             {TABS.map((tab) => {
               if (tab.key === "price") {
