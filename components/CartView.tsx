@@ -54,15 +54,15 @@ export function useCart() {
   return { data, dropped, reload: load };
 }
 
-export function totals(data: CartData) {
+export function totals(data: CartData, opts?: { pickup?: boolean }) {
   const subtotal = data.lines.reduce((s, l) => s + l.price * l.qty, 0);
   const free = data.freeShippingThreshold > 0 && subtotal >= data.freeShippingThreshold;
-  const shipping = data.lines.length === 0 ? 0 : free ? 0 : data.shippingFee;
+  const shipping = opts?.pickup || data.lines.length === 0 ? 0 : free ? 0 : data.shippingFee;
   return { subtotal, shipping, total: subtotal + shipping };
 }
 
-export function SummaryRows({ data }: { data: CartData }) {
-  const { subtotal, shipping, total } = totals(data);
+export function SummaryRows({ data, pickup = false }: { data: CartData; pickup?: boolean }) {
+  const { subtotal, shipping, total } = totals(data, { pickup });
   const remain = data.freeShippingThreshold - subtotal;
   return (
     <>
@@ -71,10 +71,10 @@ export function SummaryRows({ data }: { data: CartData }) {
         <span>{formatPrice(subtotal)}</span>
       </div>
       <div className="sum-row">
-        <span>運費</span>
+        <span>{pickup ? "運費（自取）" : "運費"}</span>
         <span>{shipping === 0 ? "免運" : formatPrice(shipping)}</span>
       </div>
-      {data.freeShippingThreshold > 0 && remain > 0 && data.lines.length > 0 && (
+      {!pickup && data.freeShippingThreshold > 0 && remain > 0 && data.lines.length > 0 && (
         <div className="sum-row">
           <small>再購買 {formatPrice(remain)} 即享免運</small>
         </div>

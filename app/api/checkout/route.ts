@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { getStore } from "@/lib/store";
 import { getLineIdentity, lineLoginEnabled } from "@/lib/line";
+import { enabledPickupPoints } from "@/lib/pickup";
 import { placeOrder, type CartLine } from "@/lib/orders";
+import type { Fulfillment } from "@/lib/types";
 
 function text(value: unknown, max: number): string {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
@@ -22,7 +24,16 @@ export async function POST(request: Request) {
   const recipient = text(body.recipient, 60);
   const phone = text(body.phone, 30);
   const address = text(body.address, 200);
-  if (!recipient || !phone || !address) {
+  const fulfillment: Fulfillment = text(body.fulfillment, 20) === "pickup" ? "pickup" : "delivery";
+  const pickupPointId = text(body.pickupPointId, 80);
+
+  if (!recipient || !phone) {
+    return NextResponse.json({ error: "請填寫姓名與電話" }, { status: 400 });
+  }
+  if (fulfillment === "pickup") {
+    const point = enabledPickupPoints(settings).find((p) => p.id === pickupPointId);
+    if (!point) return NextResponse.json({ error: "請選擇自取地點" }, { status: 400 });
+  } else if (!address) {
     return NextResponse.json({ error: "請完整填寫收件人、電話與地址" }, { status: 400 });
   }
 
@@ -47,6 +58,8 @@ export async function POST(request: Request) {
     recipient,
     phone,
     address,
+    fulfillment,
+    pickupPointId,
     note: text(body.note, 300),
     identity: {
       lineUserId: identity?.userId ?? "",

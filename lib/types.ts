@@ -30,6 +30,16 @@ export type Product = {
 };
 
 export type OrderStatus = "pending" | "paid" | "shipped" | "completed" | "cancelled";
+export type Fulfillment = "delivery" | "pickup";
+
+export type PickupPoint = {
+  id: string;
+  name: string;
+  address: string;
+  hours: string;
+  note: string;
+  enabled: boolean;
+};
 
 export type OrderItem = {
   productId: string;
@@ -61,6 +71,9 @@ export type Order = {
   recipient: string;
   phone: string;
   address: string;
+  fulfillment: Fulfillment;
+  pickupPointId: string;
+  pickupPointName: string;
   note: string;
   items: OrderItem[];
   subtotal: number;
@@ -93,6 +106,7 @@ export type Settings = {
   loginChannelSecret: string;
   messagingToken: string;
   notifyTo: string;
+  pickupPoints: PickupPoint[];
 };
 
 export type Admin = { passwordHash: string; createdAt: string };

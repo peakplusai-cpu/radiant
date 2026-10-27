@@ -1,8 +1,13 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { saveSettings, testPush } from "@/app/actions/admin";
-import type { Settings } from "@/lib/types";
+import type { PickupPoint, Settings } from "@/lib/types";
+
+type PointDraft = PickupPoint & { key: string };
+
+let pointN = 0;
+const nextPointKey = () => `pk${++pointN}`;
 
 type Props = {
   settings: Omit<Settings, "secret" | "loginChannelSecret" | "messagingToken">;
@@ -15,10 +20,24 @@ type Props = {
 export function SettingsForm({ settings, hasLoginSecret, hasMessagingToken, callbackUrl, loginReady }: Props) {
   const [message, action, pending] = useActionState(saveSettings, "");
   const [testMessage, testAction, testing] = useActionState(testPush, "");
+  const [points, setPoints] = useState<PointDraft[]>(() =>
+    (settings.pickupPoints ?? []).map((p) => ({ ...p, key: nextPointKey() }))
+  );
+
+  function patchPoint(key: string, patch: Partial<PointDraft>) {
+    setPoints((list) => list.map((p) => (p.key === key ? { ...p, ...patch } : p)));
+  }
 
   return (
     <>
       <form action={action}>
+        <input
+          type="hidden"
+          name="pickupPoints"
+          value={JSON.stringify(
+            points.map((p) => ({ id: p.id, name: p.name, address: p.address, hours: p.hours, note: p.note, enabled: p.enabled }))
+          )}
+        />
         <div className="form-grid">
           <div>
             <section className="panel">
@@ -126,6 +145,83 @@ export function SettingsForm({ settings, hasLoginSecret, hasMessagingToken, call
                 <textarea className="textarea" name="paymentNote" defaultValue={settings.paymentNote} maxLength={600} />
                 <span className="hint">顯示在結帳頁與訂單完成頁，例如匯款帳號或收款方式。</span>
               </label>
+            </section>
+
+            <section className="panel">
+              <h2>
+                自取地點
+                <small>至少有一個啟用中的地點，結帳頁才會出現自取選項。自取不收運費。</small>
+              </h2>
+              {points.map((p, i) => (
+                <div key={p.key} className="point-card">
+                  <div className="point-card-head">
+                    <span>地點 {i + 1}</span>
+                    <button type="button" className="btn small danger" onClick={() => setPoints((list) => list.filter((x) => x.key !== p.key))}>
+                      刪除
+                    </button>
+                  </div>
+                  <label className="field">
+                    <span className="label">名稱</span>
+                    <input
+                      className="input"
+                      value={p.name}
+                      onChange={(e) => patchPoint(p.key, { name: e.target.value })}
+                      placeholder="例如：大安門市、7-ELEVEN 某某門市"
+                      maxLength={80}
+                    />
+                  </label>
+                  <label className="field">
+                    <span className="label">地址或位置說明</span>
+                    <input
+                      className="input"
+                      value={p.address}
+                      onChange={(e) => patchPoint(p.key, { address: e.target.value })}
+                      maxLength={200}
+                    />
+                  </label>
+                  <label className="field">
+                    <span className="label">可取時段（選填）</span>
+                    <input
+                      className="input"
+                      value={p.hours}
+                      onChange={(e) => patchPoint(p.key, { hours: e.target.value })}
+                      placeholder="例如：平日 12:00–20:00"
+                      maxLength={80}
+                    />
+                  </label>
+                  <label className="field">
+                    <span className="label">備註（選填）</span>
+                    <input
+                      className="input"
+                      value={p.note}
+                      onChange={(e) => patchPoint(p.key, { note: e.target.value })}
+                      maxLength={160}
+                    />
+                  </label>
+                  <label className="toggle" style={{ marginBottom: 0 }}>
+                    <input
+                      type="checkbox"
+                      checked={p.enabled}
+                      onChange={(e) => patchPoint(p.key, { enabled: e.target.checked })}
+                    />
+                    <span>開放自取</span>
+                  </label>
+                </div>
+              ))}
+              {points.length < 20 && (
+                <button
+                  type="button"
+                  className="btn small"
+                  onClick={() =>
+                    setPoints((list) => [
+                      ...list,
+                      { key: nextPointKey(), id: "", name: "", address: "", hours: "", note: "", enabled: true },
+                    ])
+                  }
+                >
+                  新增自取點
+                </button>
+              )}
             </section>
           </div>
         </div>

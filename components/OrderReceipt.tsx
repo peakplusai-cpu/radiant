@@ -1,4 +1,4 @@
-import { formatDate, formatPrice, ORDER_STATUS_LABEL } from "@/lib/format";
+import { formatDate, formatPrice, fulfillmentLabel, ORDER_STATUS_LABEL } from "@/lib/format";
 import type { Order } from "@/lib/types";
 import { ProductImage } from "./ProductImage";
 
@@ -38,7 +38,7 @@ export function OrderReceipt({ order, showAddress = true }: { order: Order; show
           <span>{formatPrice(order.subtotal)}</span>
         </div>
         <div className="sum-row">
-          <span>運費</span>
+          <span>{order.fulfillment === "pickup" ? "運費（自取）" : "運費"}</span>
           <span>{order.shipping === 0 ? "免運" : formatPrice(order.shipping)}</span>
         </div>
         <div className="sum-row total">
@@ -48,12 +48,14 @@ export function OrderReceipt({ order, showAddress = true }: { order: Order; show
       </div>
       {showAddress && (
         <dl className="kv" style={{ marginTop: 28, paddingTop: 22, borderTop: "1px solid var(--teal-soft)" }}>
-          <dt>收件人</dt>
+          <dt>取貨方式</dt>
+          <dd>{fulfillmentLabel(order.fulfillment)}</dd>
+          <dt>姓名</dt>
           <dd>{order.recipient}</dd>
           <dt>電話</dt>
           <dd>{order.phone}</dd>
-          <dt>地址</dt>
-          <dd>{order.address}</dd>
+          <dt>{order.fulfillment === "pickup" ? "自取地點" : "地址"}</dt>
+          <dd>{order.address || order.pickupPointName}</dd>
           {order.note && (
             <>
               <dt>備註</dt>

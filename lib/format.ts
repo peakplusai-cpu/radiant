@@ -1,4 +1,4 @@
-import type { OrderStatus } from "./types";
+import type { Fulfillment, OrderStatus } from "./types";
 
 export function formatPrice(n: number): string {
   return `NT$ ${Math.round(n).toLocaleString("en-US")}`;
@@ -27,3 +27,7 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
 
 export const ORDER_STATUSES: OrderStatus[] = ["pending", "paid", "shipped", "completed", "cancelled"];
 export const OPEN_STATUSES: OrderStatus[] = ["pending", "paid"];
+
+export function fulfillmentLabel(kind: Fulfillment | undefined): string {
+  return kind === "pickup" ? "自取" : "宅配";
+}

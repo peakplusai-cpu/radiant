@@ -1,8 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import { randomBytes } from "crypto";
-import type { Settings, Store } from "./types";
+import type { Order, Settings, Store } from "./types";
 import { supabaseAdmin, supabaseConfigured } from "./supabase";
+import { sanitizePickupPoints } from "./pickup";
 import { sanitizeWall } from "./wall";
 
 const STORE_PATH = process.env.RADIANT_DATA_FILE || join(process.cwd(), "data", "store.json");
@@ -25,16 +26,30 @@ function defaultSettings(): Settings {
     loginChannelSecret: "",
     messagingToken: "",
     notifyTo: "",
+    pickupPoints: [],
+  };
+}
+
+function normalizeOrder(order: Partial<Order>): Order {
+  return {
+    ...(order as Order),
+    fulfillment: order.fulfillment === "pickup" ? "pickup" : "delivery",
+    pickupPointId: typeof order.pickupPointId === "string" ? order.pickupPointId : "",
+    pickupPointName: typeof order.pickupPointName === "string" ? order.pickupPointName : "",
   };
 }
 
 function normalize(parsed: Partial<Store>): Store {
   return {
     admin: parsed.admin ?? null,
-    settings: { ...defaultSettings(), ...(parsed.settings ?? {}) },
+    settings: {
+      ...defaultSettings(),
+      ...(parsed.settings ?? {}),
+      pickupPoints: sanitizePickupPoints(parsed.settings?.pickupPoints),
+    },
     products: parsed.products ?? [],
     customers: parsed.customers ?? [],
-    orders: parsed.orders ?? [],
+    orders: (parsed.orders ?? []).map(normalizeOrder),
     wallPhotos: sanitizeWall(parsed.wallPhotos),
   };
 }

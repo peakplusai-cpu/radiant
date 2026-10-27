@@ -4,7 +4,8 @@ import { uid } from "./id";
 import { variantPrice } from "./products";
 import { formatPrice } from "./format";
 import { pushLine } from "./line";
-import type { Customer, Order, OrderItem, OrderStatus, Store } from "./types";
+import { enabledPickupPoints, formatPickupAddress } from "./pickup";
+import type { Customer, Fulfillment, Order, OrderItem, OrderStatus, Store } from "./types";
 
 export type CartLine = { productId: string; variantId: string; qty: number };
 
@@ -13,6 +14,8 @@ export type CheckoutInput = {
   recipient: string;
   phone: string;
   address: string;
+  fulfillment: Fulfillment;
+  pickupPointId: string;
   note: string;
   identity: { lineUserId: string; lineName: string; lineId: string; verified: boolean };
 };
@@ -106,8 +109,21 @@ export async function placeOrder(
       }
 
       const subtotal = items.reduce((s, i) => s + i.price * i.qty, 0);
-      const { shippingFee, freeShippingThreshold } = store.settings;
-      const shipping = freeShippingThreshold > 0 && subtotal >= freeShippingThreshold ? 0 : shippingFee;
+      const pickup = input.fulfillment === "pickup";
+      let shipping = 0;
+      let address = input.address;
+      let pickupPointId = "";
+      let pickupPointName = "";
+      if (pickup) {
+        const point = enabledPickupPoints(store.settings).find((p) => p.id === input.pickupPointId);
+        if (!point) throw new OrderError("請選擇有效的自取地點");
+        pickupPointId = point.id;
+        pickupPointName = point.name;
+        address = formatPickupAddress(point);
+      } else {
+        const { shippingFee, freeShippingThreshold } = store.settings;
+        shipping = freeShippingThreshold > 0 && subtotal >= freeShippingThreshold ? 0 : shippingFee;
+      }
       const customer = upsertCustomer(store, input.identity);
       const now = new Date().toISOString();
       const order: Order = {
@@ -117,7 +133,10 @@ export async function placeOrder(
         customerId: customer.id,
         recipient: input.recipient,
         phone: input.phone,
-        address: input.address,
+        address,
+        fulfillment: pickup ? "pickup" : "delivery",
+        pickupPointId,
+        pickupPointName,
         note: input.note,
         items,
         subtotal,
@@ -134,16 +153,22 @@ export async function placeOrder(
     });
 
     const lines = result.order.items.map((i) => `· ${i.name} ${i.color} × ${i.qty}`).join("\n");
+    const how =
+      result.order.fulfillment === "pickup"
+        ? `自取：${result.order.pickupPointName}`
+        : `宅配：${result.order.address}`;
     const shopMsg =
       `新訂單 ${result.order.code}\n` +
-      `${result.customer.lineName}${result.customer.lineId ? `（${result.customer.lineId}）` : ""}` +
+      `${result.customer.lineName}${result.customer.lineId ? `（${result.customer.lineId}）` : ""}\n` +
+      `${result.order.recipient} ${result.order.phone}\n` +
+      `${how}` +
       `${result.priorOrders > 0 ? `\n此客戶累計第 ${result.priorOrders + 1} 張單，請合併處理` : ""}\n` +
       `${lines}\n合計 ${formatPrice(result.order.total)}`;
     void pushLine(result.notifyTo, shopMsg);
     if (result.customer.lineUserId) {
       void pushLine(
         result.customer.lineUserId,
-        `Radiant 已收到您的訂單 ${result.order.code}\n${lines}\n合計 ${formatPrice(result.order.total)}\n我們會盡快與您確認。`
+        `Radiant 已收到您的訂單 ${result.order.code}\n${how}\n${lines}\n合計 ${formatPrice(result.order.total)}\n我們會盡快與您確認。`
       );
     }
     return { ok: true, order: result.order, customer: result.customer };

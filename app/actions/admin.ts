@@ -15,6 +15,7 @@ import { uid } from "@/lib/id";
 import { changeOrder } from "@/lib/orders";
 import { pushLine } from "@/lib/line";
 import { OPEN_STATUSES, ORDER_STATUSES } from "@/lib/format";
+import { sanitizePickupPoints } from "@/lib/pickup";
 import { sanitizeWall } from "@/lib/wall";
 import type { Detail, OrderStatus, Product, Variant } from "@/lib/types";
 
@@ -225,6 +226,12 @@ export async function saveCustomerNote(form: FormData): Promise<void> {
 
 export async function saveSettings(_prev: string, form: FormData): Promise<string> {
   await guard();
+  let pickupPoints: unknown = [];
+  try {
+    pickupPoints = JSON.parse(str(form, "pickupPoints", 40_000) || "[]");
+  } catch {
+    return "自取點資料格式不正確";
+  }
   await mutate((s) => {
     const st = s.settings;
     st.shopName = str(form, "shopName", 40) || "Radiant";
@@ -244,6 +251,7 @@ export async function saveSettings(_prev: string, form: FormData): Promise<strin
     if (token) st.messagingToken = token;
     if (form.get("clearLoginSecret") === "on") st.loginChannelSecret = "";
     if (form.get("clearMessagingToken") === "on") st.messagingToken = "";
+    st.pickupPoints = sanitizePickupPoints(pickupPoints);
   });
   revalidatePath("/", "layout");
   return "已儲存";

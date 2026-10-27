@@ -18,7 +18,7 @@ export default async function OrdersAdmin({ searchParams }: { searchParams: Prom
     .filter((o) => {
       if (!q) return true;
       const c = byId.get(o.customerId);
-      return `${o.code} ${o.recipient} ${o.phone} ${c?.lineName ?? ""} ${c?.lineId ?? ""}`.toLowerCase().includes(q);
+      return `${o.code} ${o.recipient} ${o.phone} ${o.pickupPointName} ${o.address} ${c?.lineName ?? ""} ${c?.lineId ?? ""}`.toLowerCase().includes(q);
     })
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
@@ -85,7 +85,12 @@ export default async function OrdersAdmin({ searchParams }: { searchParams: Prom
                       </div>
                     )}
                   </td>
-                  <td>{o.recipient}</td>
+                  <td>
+                    {o.recipient}
+                    {o.fulfillment === "pickup" && (
+                      <div style={{ fontSize: 12.5, color: "var(--teal-deep)", marginTop: 2 }}>自取{o.pickupPointName ? ` · ${o.pickupPointName}` : ""}</div>
+                    )}
+                  </td>
                   <td style={{ maxWidth: 260, fontSize: 13, color: "var(--muted)" }}>
                     {o.items.map((i) => `${i.name} ${i.color}×${i.qty}`).join("、")}
                   </td>

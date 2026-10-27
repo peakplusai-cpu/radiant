@@ -3,6 +3,7 @@ import { Footer } from "@/components/Footer";
 import { CheckoutForm } from "@/components/CheckoutForm";
 import { getStore } from "@/lib/store";
 import { getLineIdentity, lineLoginEnabled } from "@/lib/line";
+import { enabledPickupPoints } from "@/lib/pickup";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "結帳" };
@@ -45,7 +46,11 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
             </a>
           </section>
         ) : (
-          <CheckoutForm identity={identity ? { name: identity.name } : null} paymentNote={settings.paymentNote} />
+          <CheckoutForm
+            identity={identity ? { name: identity.name } : null}
+            paymentNote={settings.paymentNote}
+            pickupPoints={enabledPickupPoints(settings)}
+          />
         )}
       </main>
       <Footer />

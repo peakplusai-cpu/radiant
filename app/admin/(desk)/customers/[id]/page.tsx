@@ -35,7 +35,7 @@ export default async function CustomerAdmin({
   const mergedQty = mergedItems.reduce((s, i) => s + i.qty, 0);
   const itemsTotal = open.reduce((s, o) => s + o.subtotal, 0);
   const shippingTotal = open.reduce((s, o) => s + o.shipping, 0);
-  const addresses = [...new Map(open.map((o) => [`${o.recipient}|${o.phone}|${o.address}`, o])).values()];
+  const addresses = [...new Map(open.map((o) => [`${o.fulfillment}|${o.recipient}|${o.phone}|${o.address}`, o])).values()];
   const notes = open.filter((o) => o.note).map((o) => `${o.code}：${o.note}`);
   const spent = mine.filter((o) => o.status !== "cancelled").reduce((s, o) => s + o.total, 0);
 
@@ -101,7 +101,7 @@ export default async function CustomerAdmin({
                   <dd>
                     {addresses.map((o) => (
                       <div key={o.id} style={{ marginBottom: 6 }}>
-                        {o.recipient}　{o.phone}
+                        {o.fulfillment === "pickup" ? "自取" : "宅配"}　{o.recipient}　{o.phone}
                         <br />
                         {o.address}
                       </div>
@@ -120,7 +120,7 @@ export default async function CustomerAdmin({
                 </dl>
                 {addresses.length > 1 && (
                   <div className="notice error hide-print" style={{ marginBottom: 18 }}>
-                    這些訂單的收件資料不一致，請先與客戶確認再合併出貨。
+                    這些訂單的取貨方式或收件資料不一致，請先與客戶確認再合併。
                   </div>
                 )}
                 <div className="row-actions hide-print" style={{ justifyContent: "flex-start" }}>

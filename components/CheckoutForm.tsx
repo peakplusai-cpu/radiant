@@ -5,20 +5,26 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { formatPrice } from "@/lib/format";
 import { clearCart } from "@/lib/cart-client";
+import type { Fulfillment, PickupPoint } from "@/lib/types";
 import { ProductImage } from "./ProductImage";
 import { SummaryRows, totals, useCart } from "./CartView";
 
 export function CheckoutForm({
   identity,
   paymentNote,
+  pickupPoints,
 }: {
   identity: { name: string } | null;
   paymentNote: string;
+  pickupPoints: PickupPoint[];
 }) {
   const router = useRouter();
   const { data } = useCart();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [method, setMethod] = useState<Fulfillment>("delivery");
+  const [pickupId, setPickupId] = useState(pickupPoints[0]?.id ?? "");
+  const pickupOn = pickupPoints.length > 0 && method === "pickup";
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -37,6 +43,8 @@ export function CheckoutForm({
         note: form.get("note"),
         lineId: form.get("lineId"),
         lineName: form.get("lineName"),
+        fulfillment: pickupOn ? "pickup" : "delivery",
+        pickupPointId: pickupOn ? pickupId : "",
       }),
     });
     const json = (await res.json()) as { code?: string; token?: string; error?: string };
@@ -62,6 +70,7 @@ export function CheckoutForm({
     );
   }
   const blocked = data.lines.some((l) => l.stock < 1 || l.qty > l.stock);
+  const selected = pickupPoints.find((p) => p.id === pickupId);
 
   return (
     <form onSubmit={submit} className="cart-grid">
@@ -95,10 +104,33 @@ export function CheckoutForm({
           </div>
         )}
 
-        <h2 style={{ fontFamily: "var(--serif-tc)", fontSize: 20, marginBottom: 22, letterSpacing: "0.08em" }}>收件資料</h2>
+        {pickupPoints.length > 0 && (
+          <div className="method-switch" role="radiogroup" aria-label="取貨方式">
+            <button
+              type="button"
+              className={method === "delivery" ? "on" : ""}
+              aria-pressed={method === "delivery"}
+              onClick={() => setMethod("delivery")}
+            >
+              宅配
+            </button>
+            <button
+              type="button"
+              className={method === "pickup" ? "on" : ""}
+              aria-pressed={method === "pickup"}
+              onClick={() => setMethod("pickup")}
+            >
+              自取
+            </button>
+          </div>
+        )}
+
+        <h2 style={{ fontFamily: "var(--serif-tc)", fontSize: 20, marginBottom: 22, letterSpacing: "0.08em" }}>
+          {pickupOn ? "自取資料" : "收件資料"}
+        </h2>
         <div className="two">
           <label className="field">
-            <span className="label">收件人</span>
+            <span className="label">姓名</span>
             <input className="input" name="recipient" required maxLength={60} autoComplete="name" />
           </label>
           <label className="field">
@@ -106,10 +138,33 @@ export function CheckoutForm({
             <input className="input" name="phone" required maxLength={30} inputMode="tel" autoComplete="tel" />
           </label>
         </div>
-        <label className="field">
-          <span className="label">收件地址</span>
-          <input className="input" name="address" required maxLength={200} autoComplete="street-address" />
-        </label>
+        {pickupOn ? (
+          <div className="pickup-list">
+            {pickupPoints.map((p) => (
+              <label key={p.id} className={`pickup-choice${pickupId === p.id ? " on" : ""}`}>
+                <input
+                  type="radio"
+                  name="pickupPointId"
+                  value={p.id}
+                  checked={pickupId === p.id}
+                  onChange={() => setPickupId(p.id)}
+                  required
+                />
+                <span>
+                  <b>{p.name}</b>
+                  {p.address && <small>{p.address}</small>}
+                  {p.hours && <small>時段：{p.hours}</small>}
+                  {p.note && <small>{p.note}</small>}
+                </span>
+              </label>
+            ))}
+          </div>
+        ) : (
+          <label className="field">
+            <span className="label">收件地址</span>
+            <input className="input" name="address" required maxLength={200} autoComplete="street-address" />
+          </label>
+        )}
         {identity && (
           <label className="field">
             <span className="label">LINE ID（選填）</span>
@@ -121,6 +176,11 @@ export function CheckoutForm({
           <span className="label">備註</span>
           <textarea className="textarea" name="note" maxLength={300} />
         </label>
+        {pickupOn && selected && (
+          <div className="notice" style={{ marginBottom: 20 }}>
+            自取不收運費。商品備妥後我們會透過 LINE 通知您前往「{selected.name}」取貨。
+          </div>
+        )}
         {paymentNote && <div className="notice">{paymentNote}</div>}
       </div>
 
@@ -145,14 +205,14 @@ export function CheckoutForm({
             </div>
           ))}
         </div>
-        <SummaryRows data={data} />
+        <SummaryRows data={data} pickup={pickupOn} />
         {error && (
           <div className="notice error" style={{ marginTop: 20 }} role="alert">
             {error}
           </div>
         )}
         <button type="submit" className="btn solid" disabled={busy || blocked}>
-          {busy ? "送出中…" : `送出訂單 · ${formatPrice(totals(data).total)}`}
+          {busy ? "送出中…" : `送出訂單 · ${formatPrice(totals(data, { pickup: pickupOn }).total)}`}
         </button>
         {blocked && (
           <p style={{ fontSize: 13, color: "var(--alert)", margin: "12px 0 0" }}>

@@ -1107,6 +1107,90 @@ h3 {
   gap: 0 28px;
 }
 
+.method-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border: 1px solid var(--teal);
+  margin-bottom: 32px;
+}
+
+.method-switch button {
+  background: none;
+  border: 0;
+  min-height: 48px;
+  cursor: pointer;
+  letter-spacing: 0.22em;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.method-switch button + button {
+  border-left: 1px solid var(--teal-soft);
+}
+
+.method-switch button.on {
+  background: var(--teal-wash);
+  color: var(--teal-deep);
+  font-weight: 500;
+}
+
+.pickup-list {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.pickup-choice {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 14px;
+  align-items: start;
+  padding: 16px 18px;
+  border: 1px solid var(--teal-soft);
+  cursor: pointer;
+}
+
+.pickup-choice.on {
+  border-color: var(--teal);
+  background: var(--teal-wash);
+}
+
+.pickup-choice input {
+  margin-top: 4px;
+  accent-color: var(--teal-deep);
+}
+
+.pickup-choice b {
+  display: block;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+
+.pickup-choice small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+
+.point-card {
+  border: 1px solid var(--teal-soft);
+  padding: 18px 20px 8px;
+  margin-bottom: 16px;
+}
+
+.point-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+}
+
 .receipt {
   border: 1px solid var(--teal);
   padding: clamp(28px, 4vw, 56px);
