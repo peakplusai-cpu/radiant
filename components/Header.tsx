@@ -13,9 +13,9 @@ export async function Header() {
             <Link href="/" className="hide-sm">商品</Link>
             <Link href="/orders">我的訂單</Link>
           </nav>
-          <Link href="/" className="wordmark" aria-label={settings.shopName}>
-            <img src="/logo-mark.png" alt="" className="wordmark-mark" width={36} height={36} />
-            <span>{settings.shopName}</span>
+          <Link href="/" className="brand-logo" aria-label={settings.shopName}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-mark.png" alt={settings.shopName} width={56} height={56} />
           </Link>
           <div className="mast-tools">
             <Link href="/cart">

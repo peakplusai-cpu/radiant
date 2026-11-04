@@ -9,7 +9,10 @@ export default async function SetupPage() {
   return (
     <div className="login-wrap">
       <div className="login-box">
-        <div className="wordmark">Radiant</div>
+        <div className="brand-logo login-logo">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-mark.png" alt="Radiant" width={64} height={64} />
+        </div>
         <div className="sub">FIRST-TIME SETUP</div>
         <p style={{ fontSize: 14, color: "var(--muted)", marginTop: -14, marginBottom: 28 }}>
           第一次使用，請設定員工後台的登入密碼。

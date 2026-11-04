@@ -265,7 +265,7 @@ h3 {
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   padding: 0 var(--gutter);
-  height: 76px;
+  height: 84px;
 }
 
 .mast-nav,
@@ -312,6 +312,41 @@ h3 {
   right: 0;
 }
 
+.brand-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.brand-logo img {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  display: block;
+}
+
+.footer-logo img {
+  width: 52px;
+  height: 52px;
+}
+
+.login-logo {
+  margin: 0 auto 8px;
+}
+
+.login-logo img {
+  width: 64px;
+  height: 64px;
+}
+
+.admin-logo {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  display: block;
+}
+
 .wordmark {
   font-family: var(--display);
   font-size: 30px;
@@ -321,22 +356,9 @@ h3 {
   padding-left: 0.42em;
   line-height: 1;
   color: var(--ink);
-}
-
-.wordmark {
   display: inline-flex;
   align-items: center;
   gap: 14px;
-}
-
-.wordmark-mark {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  object-fit: cover;
-  flex: none;
-  box-shadow: 0 0 0 1px var(--teal-soft);
-  padding-left: 0;
 }
 
 .bag-count {
@@ -1257,9 +1279,8 @@ h3 {
   padding-bottom: clamp(36px, 5vw, 64px);
 }
 
-.footer .wordmark {
-  font-size: 26px;
-  padding-left: 0;
+.footer .brand-logo {
+  margin-bottom: 4px;
 }
 
 .footer p {
@@ -1347,13 +1368,8 @@ h3 {
 
 .admin-brand {
   display: flex;
-  align-items: baseline;
-  gap: 16px;
-}
-
-.admin-brand .wordmark {
-  font-size: 22px;
-  padding-left: 0;
+  align-items: center;
+  gap: 12px;
 }
 
 .admin-brand small {
@@ -1834,11 +1850,8 @@ h3 {
   padding: 52px 44px 36px;
 }
 
-.login-box .wordmark {
-  font-size: 26px;
-  text-align: center;
-  padding-left: 0.42em;
-  margin-bottom: 8px;
+.login-box .brand-logo {
+  margin-bottom: 12px;
 }
 
 .login-box .sub {
@@ -1918,8 +1931,9 @@ h3 {
     height: 64px;
     grid-template-columns: 1fr auto 1fr;
   }
-  .wordmark {
-    font-size: 22px;
+  .brand-logo img {
+    width: 48px;
+    height: 48px;
   }
   .mast-nav {
     gap: 16px;
@@ -1979,15 +1993,9 @@ h3 {
   .masthead-inner {
     padding: 0 18px;
   }
-  .wordmark {
-    font-size: 18px;
-    letter-spacing: 0.3em;
-    padding-left: 0.3em;
-    gap: 8px;
-  }
-  .wordmark-mark {
-    width: 26px;
-    height: 26px;
+  .brand-logo img {
+    width: 42px;
+    height: 42px;
   }
   .mast-nav a.hide-sm {
     display: none;

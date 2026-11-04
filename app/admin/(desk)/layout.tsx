@@ -13,7 +13,8 @@ export default async function DeskLayout({ children }: { children: React.ReactNo
     <>
       <header className="admin-bar">
         <div className="admin-brand">
-          <span className="wordmark">Radiant</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-mark.png" alt="Radiant" className="admin-logo" width={32} height={32} />
           <small>Staff</small>
         </div>
         <AdminNav />

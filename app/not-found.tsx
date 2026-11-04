@@ -8,8 +8,9 @@ export default function NotFound() {
           <nav className="mast-nav" aria-label="主選單">
             <Link href="/">商品</Link>
           </nav>
-          <Link href="/" className="wordmark" aria-label="Radiant">
-            Radiant
+          <Link href="/" className="brand-logo" aria-label="Radiant">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-mark.png" alt="Radiant" width={56} height={56} />
           </Link>
           <div className="mast-tools">
             <Link href="/cart">購物袋</Link>

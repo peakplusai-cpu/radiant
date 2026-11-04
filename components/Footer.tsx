@@ -12,9 +12,9 @@ export async function Footer() {
     <footer className="footer">
       <div className="footer-grid">
         <div>
-          <div className="wordmark">
-            <img src="/logo-mark.png" alt="" className="wordmark-mark" width={36} height={36} />
-            <span>{settings.shopName}</span>
+          <div className="brand-logo footer-logo" aria-hidden="true">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-mark.png" alt="" width={56} height={56} />
           </div>
           {settings.tagline && <p>{settings.tagline}</p>}
         </div>

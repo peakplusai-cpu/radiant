@@ -10,9 +10,9 @@ export default async function LoginPage() {
   return (
     <div className="login-wrap">
       <div className="login-box">
-        <div className="wordmark">
-          <img src="/logo-mark.png" alt="" className="wordmark-mark" width={36} height={36} />
-          <span>Radiant</span>
+        <div className="brand-logo login-logo">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-mark.png" alt="Radiant" width={64} height={64} />
         </div>
         <div className="sub">STAFF ONLY</div>
         <LoginForm />

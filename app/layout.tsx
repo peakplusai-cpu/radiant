@@ -74,6 +74,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               "@type": "Organization",
               name: "Radiant",
               logo: `${process.env.SITE_ORIGIN || ""}/logo.jpg`,
+              image: `${process.env.SITE_ORIGIN || ""}/logo.jpg`,
               url: process.env.SITE_ORIGIN || undefined,
             }),
           }}
