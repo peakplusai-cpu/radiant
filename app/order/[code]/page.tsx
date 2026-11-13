@@ -7,6 +7,7 @@ import { officialLineHref } from "@/lib/line-link";
 import { getStore } from "@/lib/store";
 import { getLineIdentity } from "@/lib/line";
 import { safeEqual } from "@/lib/auth";
+import { hasReceiptGrant } from "@/lib/receipt";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "訂單明細" };
@@ -26,18 +27,17 @@ export default async function OrderPage({
 
   const identity = await getLineIdentity();
   const customer = customers.find((c) => c.id === order.customerId);
-  const owner = Boolean(identity && customer && customer.lineUserId === identity.userId);
-  if (!owner && !(t && safeEqual(t, order.token))) notFound();
+  const owner = Boolean(identity && customer?.lineUserId && customer.lineUserId === identity.userId);
+  const granted = await hasReceiptGrant(order.code);
+  if (!owner && !granted && !(t && safeEqual(t, order.token))) notFound();
 
   return (
     <>
       <Header />
       <main className="page narrow">
         <div className="title-block">
-          <span className="eyebrow">Thank you</span>
-          <h1>
-            訂單已送出<span className="zh">Order received</span>
-          </h1>
+          <span className="eyebrow">謝謝</span>
+          <h1>訂單已送出</h1>
         </div>
         <OrderReceipt order={order} />
         {settings.paymentNote && <div className="notice" style={{ marginBottom: 20 }}>{settings.paymentNote}</div>}

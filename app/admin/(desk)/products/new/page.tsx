@@ -1,6 +1,8 @@
+import { requireAdmin } from "@/lib/auth";
 import { ProductForm } from "@/components/admin/ProductForm";
 
-export default function NewProduct() {
+export default async function NewProduct() {
+  await requireAdmin();
   return (
     <>
       <div className="admin-head">

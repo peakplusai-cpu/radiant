@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { getStore } from "@/lib/store";
+import { getAdminStore } from "@/lib/auth";
 import { formatDate, formatPrice, ORDER_STATUS_LABEL, OPEN_STATUSES } from "@/lib/format";
 import { totalStock } from "@/lib/products";
 
 export default async function Dashboard() {
-  const { products, orders, customers } = await getStore();
+  const { products, orders, customers } = await getAdminStore();
   const open = orders.filter((o) => OPEN_STATUSES.includes(o.status));
   const revenue = orders.filter((o) => o.status !== "cancelled").reduce((s, o) => s + o.total, 0);
   const listed = products.filter((p) => p.status === "listed").length;

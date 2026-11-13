@@ -9,7 +9,6 @@ export default function NotFound() {
             <Link href="/">商品</Link>
           </nav>
           <Link href="/" className="brand-logo" aria-label="Radiant">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo-mark.png" alt="Radiant" width={56} height={56} />
           </Link>
           <div className="mast-tools">

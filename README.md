@@ -16,7 +16,7 @@ npm run dev        # http://localhost:3100
 
 若你目前是從賣車 repo 裡的 `radiant/` 資料夾執行，先 `cd radiant` 再跑上面的指令。
 
-第一次打開 `/admin`（前台最下方「員工專用入口」）會要求設定後台密碼。
+第一次打開 `/admin` 會要求設定後台密碼。前台頁尾不再顯示員工入口。
 
 ## 獨立 GitHub + Vercel（必做）
 
@@ -34,12 +34,12 @@ git remote add origin https://github.com/你的帳號/radiant.git
 git push -u origin main
 ```
 
-3. 在 [Supabase](https://supabase.com) **另開一個專案**（不要用賣車的），SQL Editor 貼上並執行 `supabase/schema.sql`。
+3. 在 [Supabase](https://supabase.com) **另開一個專案**（不要用賣車的），SQL Editor 貼上並執行 `supabase/schema.sql`。既有專案請再執行 `supabase/migrations/20261113_harden.sql`。
 4. 在 [Vercel](https://vercel.com) **另開一個 Project** → Import 剛建的 `radiant` repo。Root Directory 留空（`.`）。不要選 `atelier-noir`。
 5. Environment Variables 填入（僅此專案、Production / Preview 分開較好）：
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY`
-   - `SITE_ORIGIN`（正式網域，例如 `https://radiant.example.com`）
+   - `NEXT_PUBLIC_SITE_URL` 或 `SITE_ORIGIN`（正式網域，例如 `https://radiant-indol.vercel.app`）
 6. Deploy。打開 `https://你的網域/admin` 設定後台密碼，再到「設定」填 **Radiant 自己的** LINE 官方帳號（不要填賣車業務的 LINE）。
 
 之後推到這個 repo 的 `main` 會自動部署。
@@ -48,7 +48,7 @@ git push -u origin main
 
 前台
 - 商品列表排序仿蝦皮：綜合排序（精選置頂 + 銷量 + 新品加權）、最新、熱銷、價格（升/降）。售完商品一律排最後。
-- 搜尋、分類篩選、商品頁顏色選擇（每色獨立庫存與選配價格）、購物袋、結帳。
+- 搜尋、分類篩選、商品頁顏色與尺寸（顏色 × 尺寸各自庫存）、購物袋、結帳。
 - 結帳以 LINE 登入取得 LINE 名稱與 LINE User ID；未設定 LINE 登入時，改由客戶自行填寫 LINE 名稱與 LINE ID（後台標示「未驗證」）。
 - 「我的訂單」：LINE 登入後可看自己所有訂單。
 

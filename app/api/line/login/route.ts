@@ -2,8 +2,12 @@ import { randomBytes } from "crypto";
 import { NextResponse } from "next/server";
 import { getStore } from "@/lib/store";
 import { lineConfig, lineLoginEnabled, safeNext, setLineState, siteOrigin } from "@/lib/line";
+import { clientIp } from "@/lib/http";
+import { rateLimit } from "@/lib/rate-limit";
 
 export async function GET(request: Request) {
+  const limit = rateLimit(`line-login:${clientIp(request.headers)}`, 20, 10 * 60 * 1000);
+  if (!limit.ok) return NextResponse.json({ error: "請稍後再試" }, { status: 429 });
   const { settings } = await getStore();
   const url = new URL(request.url);
   const next = safeNext(url.searchParams.get("next"));

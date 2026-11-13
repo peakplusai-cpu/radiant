@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getStore } from "@/lib/store";
+import { getAdminStore } from "@/lib/auth";
 import { formatDate, formatPrice, ORDER_STATUS_LABEL, ORDER_STATUSES, OPEN_STATUSES } from "@/lib/format";
 import { CancelOrderButton } from "@/components/admin/CancelOrderButton";
 import type { OrderStatus } from "@/lib/types";
@@ -8,7 +8,7 @@ export default async function OrdersAdmin({ searchParams }: { searchParams: Prom
   const sp = await searchParams;
   const status = ORDER_STATUSES.includes(sp.status as OrderStatus) ? (sp.status as OrderStatus) : undefined;
   const q = (sp.q ?? "").trim().toLowerCase();
-  const { orders, customers } = await getStore();
+  const { orders, customers } = await getAdminStore();
   const byId = new Map(customers.map((c) => [c.id, c]));
   const orderCount = new Map<string, number>();
   for (const o of orders) orderCount.set(o.customerId, (orderCount.get(o.customerId) ?? 0) + 1);

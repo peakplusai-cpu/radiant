@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { getStore } from "@/lib/store";
+import { getAdminStore } from "@/lib/auth";
 import { formatDate, formatPrice, OPEN_STATUSES } from "@/lib/format";
 
 export default async function CustomersAdmin({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const { q = "" } = await searchParams;
   const needle = q.trim().toLowerCase();
-  const { customers, orders } = await getStore();
+  const { customers, orders } = await getAdminStore();
 
   const rows = customers
     .map((c) => {

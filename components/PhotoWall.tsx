@@ -1,14 +1,12 @@
 import Link from "next/link";
 import type { Product, WallPhoto } from "@/lib/types";
+import { ProductImage } from "./ProductImage";
 
 function frame(photo: WallPhoto, products: Product[], key: string) {
   const product = photo.productId ? products.find((p) => p.id === photo.productId) : undefined;
   const listed = product?.status === "listed";
   const alt = product?.name || "";
-  const inner = (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={photo.src} alt={alt} loading="lazy" />
-  );
+  const inner = <ProductImage src={photo.src} alt={alt} sizes="240px" />;
   if (listed && product) {
     return (
       <Link key={key} href={`/p/${product.id}`} className="wall-item">

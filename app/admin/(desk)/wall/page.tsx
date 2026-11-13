@@ -1,8 +1,8 @@
-import { getStore } from "@/lib/store";
+import { getAdminStore } from "@/lib/auth";
 import { WallForm } from "@/components/admin/WallForm";
 
 export default async function WallAdminPage() {
-  const { wallPhotos, products } = await getStore();
+  const { wallPhotos, products } = await getAdminStore();
   const options = [...products].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   return (
     <>

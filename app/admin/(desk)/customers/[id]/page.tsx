@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getStore } from "@/lib/store";
+import { getAdminStore } from "@/lib/auth";
 import { saveCustomerNote, shipAllForCustomer } from "@/app/actions/admin";
 import { formatDate, formatPrice, ORDER_STATUS_LABEL, OPEN_STATUSES } from "@/lib/format";
+import { variantLabel } from "@/lib/variants";
 import { PrintButton } from "@/components/admin/PrintButton";
 
 export default async function CustomerAdmin({
@@ -14,18 +15,18 @@ export default async function CustomerAdmin({
 }) {
   const { id } = await params;
   const { shipped } = await searchParams;
-  const { customers, orders } = await getStore();
+  const { customers, orders } = await getAdminStore();
   const customer = customers.find((c) => c.id === id);
   if (!customer) notFound();
 
   const mine = orders.filter((o) => o.customerId === id).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const open = mine.filter((o) => OPEN_STATUSES.includes(o.status));
 
-  const merged = new Map<string, { name: string; color: string; hex: string; qty: number; amount: number }>();
+  const merged = new Map<string, { name: string; color: string; size: string; hex: string; qty: number; amount: number }>();
   for (const o of open) {
     for (const i of o.items) {
       const k = `${i.productId}:${i.variantId}`;
-      const cur = merged.get(k) ?? { name: i.name, color: i.color, hex: i.hex, qty: 0, amount: 0 };
+      const cur = merged.get(k) ?? { name: i.name, color: i.color, size: i.size ?? "", hex: i.hex, qty: 0, amount: 0 };
       cur.qty += i.qty;
       cur.amount += i.qty * i.price;
       merged.set(k, cur);
@@ -75,11 +76,11 @@ export default async function CustomerAdmin({
                   </thead>
                   <tbody>
                     {mergedItems.map((i) => (
-                      <tr key={`${i.name}:${i.color}`}>
+                      <tr key={`${i.name}:${i.color}:${i.size}`}>
                         <td>{i.name}</td>
                         <td>
                           <span className="dot" style={{ background: i.hex, display: "inline-block", verticalAlign: "middle", marginRight: 8 }} />
-                          {i.color}
+                          {variantLabel(i.color, i.size)}
                         </td>
                         <td className="num right">{i.qty}</td>
                         <td className="num right">{formatPrice(i.amount)}</td>

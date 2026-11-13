@@ -8,8 +8,8 @@
   --teal-wash: #f3faf9;
   --alert: #a4473b;
   --display: var(--font-display), "Cormorant Garamond", "Times New Roman", serif;
-  --serif-tc: var(--font-serif-tc), "Noto Serif TC", "Songti TC", serif;
-  --sans: var(--font-sans), "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  --serif-tc: "Songti TC", "PMingLiU", "Noto Serif TC", "Times New Roman", serif;
+  --sans: "PingFang TC", "Hiragino Sans CNS", "Noto Sans CJK TC", "Microsoft JhengHei", system-ui, sans-serif;
   --gutter: clamp(20px, 4.5vw, 72px);
 }
 
@@ -417,6 +417,7 @@ h3 {
 }
 
 .wall-item {
+  position: relative;
   flex: none;
   display: block;
   width: min(240px, 42vw);
@@ -850,6 +851,44 @@ h3 {
   position: absolute;
   inset: 0;
   background: linear-gradient(to top right, transparent calc(50% - 0.5px), var(--muted) 50%, transparent calc(50% + 0.5px));
+}
+
+.size-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.size-btn {
+  min-width: 52px;
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--teal-soft);
+  background: #fff;
+  cursor: pointer;
+}
+
+.size-btn.on {
+  border-color: var(--teal-deep);
+  background: var(--teal-wash);
+}
+
+.size-btn.out {
+  opacity: 0.4;
+  text-decoration: line-through;
+  cursor: not-allowed;
+}
+
+.field-error {
+  display: block;
+  margin-top: 6px;
+  color: var(--alert);
+  font-size: 13px;
+}
+
+.btn.is-disabled {
+  opacity: 0.45;
+  pointer-events: none;
 }
 
 .qty {
@@ -1630,9 +1669,20 @@ h3 {
   margin-bottom: 20px;
 }
 
+.legal-copy h2 {
+  font-family: var(--serif-tc);
+  font-size: 20px;
+  margin: 28px 0 8px;
+}
+
+.legal-copy p,
+.legal-copy li {
+  font-size: 15px;
+}
+
 .vrow {
   display: grid;
-  grid-template-columns: 44px 1.3fr 1fr 0.8fr 0.9fr 32px;
+  grid-template-columns: 44px 1.15fr 0.7fr 0.9fr 0.7fr 0.85fr 32px;
   gap: 14px;
   align-items: end;
   padding-bottom: 14px;

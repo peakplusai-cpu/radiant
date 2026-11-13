@@ -22,10 +22,8 @@ export default async function OrdersPage() {
       <Header />
       <main className="page narrow">
         <div className="title-block">
-          <span className="eyebrow">Orders</span>
-          <h1>
-            My orders<span className="zh">我的訂單</span>
-          </h1>
+          <span className="eyebrow">訂單</span>
+          <h1>我的訂單</h1>
         </div>
         {!identity ? (
           <section className="gate">
@@ -42,7 +40,7 @@ export default async function OrdersPage() {
           </section>
         ) : mine.length === 0 ? (
           <div className="empty">
-            <span className="eyebrow">No orders yet</span>
+            <span className="eyebrow">尚無訂單</span>
             <p>{identity.name} 還沒有訂單。</p>
           </div>
         ) : (
