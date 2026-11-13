@@ -6,3 +6,5 @@ data
 node_modules
 *.tmp
 *.tsbuildinfo
+test-results
+playwright-report
