@@ -4,19 +4,27 @@ import type { Metadata } from "next";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { ProductBuy } from "@/components/ProductBuy";
-import { getStore } from "@/lib/store";
+import { getCatalogStore } from "@/lib/store";
+import { dynamicWithoutDatabase } from "@/lib/render";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 120;
+
+export async function generateStaticParams() {
+  const { products } = await getCatalogStore();
+  return products.filter((product) => product.status === "listed").map((product) => ({ id: product.id }));
+}
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  await dynamicWithoutDatabase();
   const { id } = await params;
-  const product = (await getStore()).products.find((p) => p.id === id && p.status === "listed");
+  const product = (await getCatalogStore()).products.find((p) => p.id === id && p.status === "listed");
   return { title: product?.name ?? "商品" };
 }
 
 export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
+  await dynamicWithoutDatabase();
   const { id } = await params;
-  const product = (await getStore()).products.find((p) => p.id === id && p.status === "listed");
+  const product = (await getCatalogStore()).products.find((p) => p.id === id && p.status === "listed");
   if (!product) notFound();
 
   return (

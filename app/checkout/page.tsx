@@ -1,6 +1,7 @@
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { CheckoutForm } from "@/components/CheckoutForm";
+import { CartPreserveNote } from "@/components/CartPreserveNote";
 import { getStore } from "@/lib/store";
 import { getLineIdentity, lineLoginEnabled } from "@/lib/line";
 import { enabledPickupPoints } from "@/lib/pickup";
@@ -26,10 +27,8 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
       <Header />
       <main className="page narrow">
         <div className="title-block">
-          <span className="eyebrow">Checkout</span>
-          <h1>
-            Checkout<span className="zh">結帳</span>
-          </h1>
+          <span className="eyebrow">結帳</span>
+          <h1>結帳</h1>
         </div>
         {line && LINE_ERRORS[line] && (
           <div className="notice error" style={{ marginBottom: 28 }}>
@@ -39,8 +38,10 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
         {loginOn && !identity ? (
           <section className="gate">
             <span className="eyebrow">LINE</span>
-            <h2>請先連接 LINE 帳號</h2>
-            <p>結帳需要您的 LINE 名稱與 ID，讓我們辨識身分、合併您的多筆訂單，並透過 LINE 與您聯繫。</p>
+            <h2>結帳前請先用 LINE 登入</h2>
+            <p>我們用 LINE 確認是您本人下單，並用 LINE 通知付款與出貨。網站沒有刷卡，訂單送出後由我們在 LINE 與您確認。</p>
+            <p>購物袋裡的商品會保留，登入後會回到這個結帳頁。</p>
+            <CartPreserveNote />
             <a href="/api/line/login?next=/checkout" className="btn line-green">
               使用 LINE 登入
             </a>
@@ -50,6 +51,7 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
             identity={identity ? { name: identity.name } : null}
             paymentNote={settings.paymentNote}
             pickupPoints={enabledPickupPoints(settings)}
+            guest={!loginOn}
           />
         )}
       </main>

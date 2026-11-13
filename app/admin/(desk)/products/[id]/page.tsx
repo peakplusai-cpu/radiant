@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getStore } from "@/lib/store";
+import { getAdminStore } from "@/lib/auth";
 import { ProductForm } from "@/components/admin/ProductForm";
 
 export default async function EditProduct({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const product = (await getStore()).products.find((p) => p.id === id);
+  const product = (await getAdminStore()).products.find((p) => p.id === id);
   if (!product) notFound();
   return (
     <>

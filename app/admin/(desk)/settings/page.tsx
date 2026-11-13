@@ -1,9 +1,10 @@
-import { getStore } from "@/lib/store";
+import { getAdminStore } from "@/lib/auth";
 import { lineConfig, lineLoginEnabled, siteOrigin } from "@/lib/line";
 import { SettingsForm } from "@/components/admin/SettingsForm";
+import { TotpPanel } from "@/components/admin/TotpPanel";
 
 export default async function SettingsPage() {
-  const { settings } = await getStore();
+  const { settings, admin } = await getAdminStore();
   const cfg = lineConfig(settings);
   const { secret: _s, loginChannelSecret: _l, messagingToken: _m, ...safe } = settings;
   void _s;
@@ -24,6 +25,7 @@ export default async function SettingsPage() {
         callbackUrl={`${await siteOrigin()}/api/line/callback`}
         loginReady={lineLoginEnabled(settings)}
       />
+      <TotpPanel enabled={Boolean(admin?.totpSecret)} />
     </>
   );
 }

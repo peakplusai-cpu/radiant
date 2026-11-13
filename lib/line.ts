@@ -1,10 +1,11 @@
 import { cookies, headers } from "next/headers";
 import { getStore } from "./store";
-import { safeEqual, sign } from "./auth";
+import { safeEqual, sign } from "./session-token";
+import { LINE_COOKIE, LINE_STATE_COOKIE, clearedCookie, cookieFlags } from "./cookie-flags";
+import { cleanPersonName } from "./phone";
+import { publicSiteUrl } from "./site";
 import type { Settings } from "./types";
 
-const IDENTITY_COOKIE = "radiant_line";
-const STATE_COOKIE = "radiant_line_state";
 const NINETY_DAYS = 90 * 24 * 60 * 60 * 1000;
 
 export type LineIdentity = { userId: string; name: string };
@@ -26,16 +27,19 @@ export function lineConfig(settings: Settings): LineConfig {
 }
 
 export function lineLoginEnabled(settings: Settings): boolean {
-  const c = lineConfig(settings);
-  return Boolean(c.loginId && c.loginSecret);
+  const config = lineConfig(settings);
+  return Boolean(config.loginId && config.loginSecret);
 }
 
+/**
+ * Production redirects use the configured site URL only.
+ * The Host header is not trusted, so it cannot turn the LINE callback into an open redirect.
+ */
 export async function siteOrigin(): Promise<string> {
-  if (process.env.SITE_ORIGIN) return process.env.SITE_ORIGIN.replace(/\/$/, "");
-  const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3100";
-  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  return `${proto}://${host}`;
+  if (process.env.NODE_ENV === "production") return publicSiteUrl();
+  const host = ((await headers()).get("host") ?? "").split(",")[0]?.trim() ?? "";
+  if (/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host)) return `http://${host}`;
+  return publicSiteUrl();
 }
 
 function encode(obj: unknown): string {
@@ -44,23 +48,17 @@ function encode(obj: unknown): string {
 
 export async function setLineIdentity(identity: LineIdentity): Promise<void> {
   const { settings } = await getStore();
-  const body = encode({ ...identity, exp: Date.now() + NINETY_DAYS });
-  const jar = await cookies();
-  jar.set(IDENTITY_COOKIE, `${body}.${sign(settings.secret, body)}`, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: NINETY_DAYS / 1000,
-    secure: process.env.NODE_ENV === "production",
-  });
+  const name = cleanPersonName(identity.name) ?? "";
+  const body = encode({ userId: identity.userId.slice(0, 80), name, exp: Date.now() + NINETY_DAYS });
+  (await cookies()).set(LINE_COOKIE, `${body}.${sign(settings.secret, body)}`, cookieFlags(NINETY_DAYS / 1000));
 }
 
 export async function clearLineIdentity(): Promise<void> {
-  (await cookies()).delete(IDENTITY_COOKIE);
+  (await cookies()).set(LINE_COOKIE, "", clearedCookie());
 }
 
 export async function getLineIdentity(): Promise<LineIdentity | null> {
-  const token = (await cookies()).get(IDENTITY_COOKIE)?.value;
+  const token = (await cookies()).get(LINE_COOKIE)?.value;
   if (!token) return null;
   const [body, mac] = token.split(".");
   if (!body || !mac) return null;
@@ -80,27 +78,30 @@ export async function getLineIdentity(): Promise<LineIdentity | null> {
 }
 
 export async function setLineState(state: string, next: string): Promise<void> {
-  (await cookies()).set(STATE_COOKIE, `${state}|${encodeURIComponent(next)}`, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 600,
-    secure: process.env.NODE_ENV === "production",
-  });
+  (await cookies()).set(LINE_STATE_COOKIE, `${state}|${encodeURIComponent(next)}`, cookieFlags(600));
 }
 
 export async function takeLineState(): Promise<{ state: string; next: string } | null> {
   const jar = await cookies();
-  const raw = jar.get(STATE_COOKIE)?.value;
-  jar.delete(STATE_COOKIE);
+  const raw = jar.get(LINE_STATE_COOKIE)?.value;
+  jar.set(LINE_STATE_COOKIE, "", clearedCookie());
   if (!raw) return null;
   const [state, next] = raw.split("|");
+  if (!state) return null;
   return { state, next: decodeURIComponent(next ?? "") };
 }
 
+/** Relative path only. Rejects protocol-relative and backslash tricks. */
 export function safeNext(next: string | null | undefined): string {
-  if (!next || !next.startsWith("/") || next.startsWith("//")) return "/";
-  return next;
+  if (!next || next.includes("\\") || /[\u0000-\u001f]/.test(next)) return "/";
+  try {
+    const url = new URL(next, "https://radiant.invalid");
+    if (url.origin !== "https://radiant.invalid") return "/";
+    if (!url.pathname.startsWith("/") || url.pathname.startsWith("//")) return "/";
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return "/";
+  }
 }
 
 export async function pushLine(to: string, text: string): Promise<boolean> {

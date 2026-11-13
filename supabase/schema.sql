@@ -8,8 +8,10 @@ create table if not exists public.radiant_store (
 
 insert into public.radiant_store (id) values (1) on conflict (id) do nothing;
 
--- Only the server (service role key) touches this table.
+-- Only the server (service role key) touches this table. No anon policies.
 alter table public.radiant_store enable row level security;
+
+revoke all on table public.radiant_store from anon, authenticated;
 
 insert into storage.buckets (id, name, public)
 values ('radiant-uploads', 'radiant-uploads', true)

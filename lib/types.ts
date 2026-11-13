@@ -3,6 +3,8 @@ export type ProductStatus = "listed" | "unlisted";
 export type Variant = {
   id: string;
   color: string;
+  /** Empty string means one-size (均碼). */
+  size: string;
   hex: string;
   sku: string;
   stock: number;
@@ -15,7 +17,10 @@ export type Product = {
   id: string;
   name: string;
   subtitle: string;
+  /** Primary category shown on the product page. */
   category: string;
+  /** Extra categories. Storefront matching also applies apparel aliases. */
+  categories: string[];
   description: string;
   details: Detail[];
   price: number;
@@ -25,6 +30,11 @@ export type Product = {
   status: ProductStatus;
   featured: boolean;
   sold: number;
+  /**
+   * True when sizes were split from a free-text 尺寸 note and stock was
+   * divided evenly. Cleared the next time staff save the product.
+   */
+  sizeStockEstimated?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -46,6 +56,7 @@ export type OrderItem = {
   variantId: string;
   name: string;
   color: string;
+  size: string;
   hex: string;
   price: number;
   qty: number;
@@ -57,6 +68,8 @@ export type Customer = {
   lineUserId: string;
   lineName: string;
   lineId: string;
+  /** Last phone, used only to group unverified guest checkouts. */
+  phone: string;
   verified: boolean;
   note: string;
   createdAt: string;
@@ -109,7 +122,23 @@ export type Settings = {
   pickupPoints: PickupPoint[];
 };
 
-export type Admin = { passwordHash: string; createdAt: string };
+export type Admin = {
+  passwordHash: string;
+  createdAt: string;
+  /** Enabled TOTP secret (base32). Never send this to the browser. */
+  totpSecret?: string;
+  /** Secret waiting for the staff member to confirm a code. */
+  totpPending?: string;
+};
+
+export type IdempotencyRecord = { key: string; code: string; at: string };
+
+export type LoginBucket = {
+  id: string;
+  failures: number;
+  windowStart: number;
+  lockedUntil: number;
+};
 
 export type Store = {
   admin: Admin | null;
@@ -118,4 +147,6 @@ export type Store = {
   customers: Customer[];
   orders: Order[];
   wallPhotos: WallPhoto[];
+  idempotency: IdempotencyRecord[];
+  loginBuckets: LoginBucket[];
 };

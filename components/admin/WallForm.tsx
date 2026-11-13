@@ -94,7 +94,6 @@ export function WallForm({ photos, products }: { photos: WallPhoto[]; products: 
           {items.map((item, i) => (
             <div key={item.key} className="wall-tile">
               <div className="photo">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={item.src} alt="" />
                 <div className="photo-actions">
                   <button type="button" onClick={() => move(i, -1)} aria-label="前移" disabled={i === 0}>

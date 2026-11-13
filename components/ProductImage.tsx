@@ -1,17 +1,22 @@
+import Image from "next/image";
+
 export function ProductImage({
   src,
   hex,
   alt,
   className,
+  sizes = "(max-width: 768px) 50vw, 320px",
+  priority = false,
 }: {
   src?: string;
   hex?: string;
   alt: string;
   className?: string;
+  sizes?: string;
+  priority?: boolean;
 }) {
   if (src) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={src} alt={alt} className={className} loading="lazy" />;
+    return <Image src={src} alt={alt} fill sizes={sizes} className={className} priority={priority} />;
   }
   return (
     <div

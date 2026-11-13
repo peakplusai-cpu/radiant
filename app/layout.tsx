@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import { Cormorant_Garamond, Noto_Sans_TC, Noto_Serif_TC } from "next/font/google";
+import { Cormorant_Garamond } from "next/font/google";
 import "./globals.css";
-import { getStore } from "@/lib/store";
+import { getCatalogStore } from "@/lib/store";
+import { publicSiteUrl } from "@/lib/site";
 
 const display = Cormorant_Garamond({
   subsets: ["latin"],
@@ -10,28 +11,12 @@ const display = Cormorant_Garamond({
   variable: "--font-display",
   display: "swap",
 });
-const sans = Noto_Sans_TC({
-  subsets: ["latin"],
-  weight: ["300", "400", "500"],
-  variable: "--font-sans",
-  display: "swap",
-  preload: false,
-});
-const serifTc = Noto_Serif_TC({
-  subsets: ["latin"],
-  weight: ["400", "500"],
-  variable: "--font-serif-tc",
-  display: "swap",
-  preload: false,
-});
-
-export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
-  const { settings } = await getStore();
+  const { settings } = await getCatalogStore();
   const description = settings.tagline || `${settings.shopName} 精選商品`;
   return {
-    metadataBase: new URL(process.env.SITE_ORIGIN || "http://localhost:3000"),
+    metadataBase: new URL(publicSiteUrl()),
     title: { default: settings.shopName, template: `%s · ${settings.shopName}` },
     description,
     applicationName: settings.shopName,
@@ -64,7 +49,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="zh-Hant" className={`${display.variable} ${sans.variable} ${serifTc.variable}`}>
+    <html lang="zh-Hant" className={display.variable}>
       <body>
         <script
           type="application/ld+json"
@@ -73,10 +58,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               "@context": "https://schema.org",
               "@type": "Organization",
               name: "Radiant",
-              logo: `${process.env.SITE_ORIGIN || ""}/logo.jpg`,
-              image: `${process.env.SITE_ORIGIN || ""}/logo.jpg`,
-              url: process.env.SITE_ORIGIN || undefined,
-            }),
+              logo: `${publicSiteUrl()}/logo.jpg`,
+              image: `${publicSiteUrl()}/og-image.jpg`,
+              url: publicSiteUrl(),
+            }).replace(/</g, "\\u003c"),
           }}
         />
         {children}

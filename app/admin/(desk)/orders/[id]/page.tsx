@@ -1,21 +1,22 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getStore } from "@/lib/store";
+import { getAdminStore } from "@/lib/auth";
 import { updateOrder } from "@/app/actions/admin";
 import { OrderReceipt } from "@/components/OrderReceipt";
 import { CancelOrderButton } from "@/components/admin/CancelOrderButton";
-import { ORDER_STATUS_LABEL, ORDER_STATUSES, OPEN_STATUSES } from "@/lib/format";
+import { ORDER_STATUS_LABEL, OPEN_STATUSES } from "@/lib/format";
+import { nextStatuses } from "@/lib/order-flow";
 
 export default async function OrderAdmin({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ updated?: string; cancelled?: string }>;
+  searchParams: Promise<{ updated?: string; cancelled?: string; error?: string }>;
 }) {
   const { id } = await params;
-  const { updated, cancelled } = await searchParams;
-  const { orders, customers } = await getStore();
+  const { updated, cancelled, error } = await searchParams;
+  const { orders, customers } = await getAdminStore();
   const order = orders.find((o) => o.id === id);
   if (!order) notFound();
   const customer = customers.find((c) => c.id === order.customerId);
@@ -35,6 +36,7 @@ export default async function OrderAdmin({
         </Link>
       </div>
       {updated && <div className="notice" style={{ marginBottom: 24 }}>訂單已更新。</div>}
+      {error && <div className="notice error" style={{ marginBottom: 24 }}>狀態無法這樣變更。</div>}
       {cancelled && <div className="notice" style={{ marginBottom: 24 }}>訂單已取消，庫存已加回商品。</div>}
 
       <div className="form-grid">
@@ -84,7 +86,7 @@ export default async function OrderAdmin({
                 <label className="field">
                   <span className="label">狀態</span>
                   <select className="select" name="status" defaultValue={order.status}>
-                    {ORDER_STATUSES.filter((s) => s !== "cancelled").map((s) => (
+                    {nextStatuses(order.status).map((s) => (
                       <option key={s} value={s}>
                         {ORDER_STATUS_LABEL[s]}
                       </option>

@@ -1,9 +1,10 @@
 import type { MetadataRoute } from "next";
+import { publicSiteUrl } from "@/lib/site";
 
 export default function robots(): MetadataRoute.Robots {
-  const origin = process.env.SITE_ORIGIN || "";
+  const origin = publicSiteUrl();
   return {
-    rules: [{ userAgent: "*", allow: "/", disallow: ["/admin", "/api", "/cart", "/checkout", "/orders"] }],
-    ...(origin ? { sitemap: `${origin}/sitemap.xml` } : {}),
+    rules: [{ userAgent: "*", allow: "/", disallow: ["/admin", "/api", "/cart", "/checkout", "/orders", "/order"] }],
+    sitemap: `${origin}/sitemap.xml`,
   };
 }

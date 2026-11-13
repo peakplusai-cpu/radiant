@@ -1,4 +1,5 @@
 import { formatDate, formatPrice, fulfillmentLabel, ORDER_STATUS_LABEL } from "@/lib/format";
+import { variantLabel } from "@/lib/variants";
 import type { Order } from "@/lib/types";
 import { ProductImage } from "./ProductImage";
 
@@ -25,7 +26,7 @@ export function OrderReceipt({ order, showAddress = true }: { order: Order; show
               <h3>{i.name}</h3>
               <div className="variant" style={{ margin: "4px 0 0" }}>
                 <span className="dot" style={{ background: i.hex }} />
-                {i.color} × {i.qty}
+                {variantLabel(i.color, i.size)} × {i.qty}
               </div>
             </div>
             <div className="amount">{formatPrice(i.price * i.qty)}</div>

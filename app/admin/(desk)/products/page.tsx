@@ -1,13 +1,14 @@
 import Link from "next/link";
-import { getStore } from "@/lib/store";
+import { getAdminStore } from "@/lib/auth";
 import { formatPrice } from "@/lib/format";
 import { priceRange, totalStock } from "@/lib/products";
+import { groupVariants, variantSummary } from "@/lib/variants";
 import { deleteProduct, toggleProduct } from "@/app/actions/admin";
 import { ProductImage } from "@/components/ProductImage";
 
 export default async function ProductsAdmin({ searchParams }: { searchParams: Promise<{ saved?: string; filter?: string }> }) {
   const { saved, filter } = await searchParams;
-  const { products } = await getStore();
+  const { products } = await getAdminStore();
   const list = [...products]
     .filter((p) => (filter === "listed" ? p.status === "listed" : filter === "unlisted" ? p.status === "unlisted" : true))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -68,9 +69,9 @@ export default async function ProductsAdmin({ searchParams }: { searchParams: Pr
                     {p.category && <div style={{ fontSize: 12.5, color: "var(--muted)" }}>{p.category}</div>}
                   </td>
                   <td>
-                    <div className="swatches" style={{ marginTop: 0 }}>
-                      {p.variants.map((v) => (
-                        <span key={v.id} className="dot" title={`${v.color}（${v.stock}）`} style={{ background: v.hex }} />
+                    <div className="swatches" style={{ marginTop: 0 }} title={variantSummary(p)}>
+                      {groupVariants(p.variants).map((group) => (
+                        <span key={group.color} className="dot" title={variantSummary({ variants: group.sizes })} style={{ background: group.hex }} />
                       ))}
                     </div>
                   </td>

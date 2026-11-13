@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useActionState, useRef, useState } from "react";
 import { saveProduct } from "@/app/actions/admin";
+import { distributeStock, parseSizeList } from "@/lib/sizes";
 import type { Product } from "@/lib/types";
 
-type VariantDraft = { key: string; id?: string; color: string; hex: string; sku: string; stock: string; price: string };
+type VariantDraft = { key: string; id?: string; color: string; size: string; hex: string; sku: string; stock: string; price: string };
 type DetailDraft = { key: string; label: string; value: string };
 
 let counter = 0;
@@ -17,7 +18,7 @@ export function ProductForm({ product }: { product?: Product }) {
   const [error, action, pending] = useActionState(saveProduct, "");
   const [name, setName] = useState(product?.name ?? "");
   const [subtitle, setSubtitle] = useState(product?.subtitle ?? "");
-  const [category, setCategory] = useState(product?.category ?? "");
+  const [category, setCategory] = useState([product?.category, ...(product?.categories ?? [])].filter(Boolean).join("、"));
   const [description, setDescription] = useState(product?.description ?? "");
   const [price, setPrice] = useState(product ? String(product.price) : "");
   const [comparePrice, setComparePrice] = useState(product?.comparePrice ? String(product.comparePrice) : "");
@@ -30,18 +31,20 @@ export function ProductForm({ product }: { product?: Product }) {
           key: key(),
           id: v.id,
           color: v.color,
+          size: v.size ?? "",
           hex: v.hex,
           sku: v.sku,
           stock: String(v.stock),
           price: v.price === null ? "" : String(v.price),
         }))
-      : [{ key: key(), color: "", hex: "#d9d9d9", sku: "", stock: "0", price: "" }]
+      : [{ key: key(), color: "", size: "", hex: "#c4b48a", sku: "", stock: "0", price: "" }]
   );
   const [details, setDetails] = useState<DetailDraft[]>(
     product?.details.length
       ? product.details.map((d) => ({ key: key(), ...d }))
       : DETAIL_SUGGESTIONS.slice(0, 3).map((label) => ({ key: key(), label, value: "" }))
   );
+  const [sizeList, setSizeList] = useState("S, M, L");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -60,6 +63,7 @@ export function ProductForm({ product }: { product?: Product }) {
     variants: variants.map((v) => ({
       id: v.id,
       color: v.color,
+      size: v.size,
       hex: v.hex,
       sku: v.sku,
       stock: Number(v.stock || 0),
@@ -102,6 +106,42 @@ export function ProductForm({ product }: { product?: Product }) {
     if (fileRef.current) fileRef.current.value = "";
   }
 
+  function applySizes() {
+    const sizes = parseSizeList(sizeList);
+    if (sizes.length < 1) return;
+    setVariants((list) => {
+      const colors = new Map<string, VariantDraft[]>();
+      for (const variant of list) {
+        const bucket = colors.get(variant.color.trim().toLowerCase()) ?? [];
+        bucket.push(variant);
+        colors.set(variant.color.trim().toLowerCase(), bucket);
+      }
+      const next: VariantDraft[] = [];
+      for (const bucket of colors.values()) {
+        const base = bucket[0];
+        const total = bucket.reduce((sum, variant) => sum + Number(variant.stock || 0), 0);
+        const counts = bucket.length === 1 && !bucket[0].size ? distributeStock(total, sizes) : sizes.map((size) => {
+          const found = bucket.find((variant) => variant.size.toUpperCase() === size);
+          return found ? Number(found.stock || 0) : 0;
+        });
+        sizes.forEach((size, index) => {
+          const found = bucket.find((variant) => variant.size.toUpperCase() === size);
+          next.push({
+            key: found?.key ?? key(),
+            id: found?.id ?? (index === 0 ? base.id : undefined),
+            color: base.color,
+            size,
+            hex: base.hex,
+            sku: found?.sku ?? "",
+            stock: String(counts[index] ?? 0),
+            price: found?.price ?? base.price,
+          });
+        });
+      }
+      return next.length ? next : list;
+    });
+  }
+
   function patchVariant(k: string, patch: Partial<VariantDraft>) {
     setVariants((list) => list.map((v) => (v.key === k ? { ...v, ...patch } : v)));
   }
@@ -136,7 +176,7 @@ export function ProductForm({ product }: { product?: Product }) {
             <label className="field">
               <span className="label">分類</span>
               <input className="input" value={category} onChange={(e) => setCategory(e.target.value)} maxLength={40} />
-              <span className="hint">相同分類名稱會在前台自動歸類。</span>
+              <span className="hint">可填多個分類，用頓號或逗號分隔。名稱含「上衣」的正韓服飾也會出現在上衣分類。</span>
             </label>
             <label className="field">
               <span className="label">商品說明</span>
@@ -146,9 +186,24 @@ export function ProductForm({ product }: { product?: Product }) {
 
           <section className="panel">
             <h2>
-              顏色與庫存
-              <small>每個顏色獨立計算庫存；如需不同售價，填入「款式價」，留白則使用商品售價。</small>
+              顏色、尺寸與庫存
+              <small>每個顏色與尺寸各自計算庫存。顧客必須先選尺寸才能加入購物袋。</small>
             </h2>
+            {product?.sizeStockEstimated && (
+              <div className="notice error" style={{ marginBottom: 16 }}>
+                尺寸是從原本的規格文字自動拆出來的，庫存是平均分配。請核對每個尺寸的數量後再儲存。
+              </div>
+            )}
+            <div className="two">
+              <label className="field">
+                <span className="label">快速套用尺寸</span>
+                <input className="input" value={sizeList} onChange={(e) => setSizeList(e.target.value)} placeholder="S, M, L, XL" />
+              </label>
+              <div className="field">
+                <span className="label">套用到目前顏色</span>
+                <button type="button" className="btn small" onClick={applySizes}>建立尺寸列</button>
+              </div>
+            </div>
             <div className="rows">
               {variants.map((v) => (
                 <div className="vrow" key={v.key}>
@@ -164,7 +219,11 @@ export function ProductForm({ product }: { product?: Product }) {
                   </div>
                   <div>
                     <span className="label">顏色名稱</span>
-                    <input className="input" value={v.color} onChange={(e) => patchVariant(v.key, { color: e.target.value })} placeholder="例：湖水綠" maxLength={40} />
+                    <input className="input" value={v.color} onChange={(e) => patchVariant(v.key, { color: e.target.value })} placeholder="例：亞麻" maxLength={40} />
+                  </div>
+                  <div>
+                    <span className="label">尺寸</span>
+                    <input className="input" value={v.size} onChange={(e) => patchVariant(v.key, { size: e.target.value })} placeholder="M，均碼留白" maxLength={12} />
                   </div>
                   <div>
                     <span className="label">SKU</span>
@@ -194,7 +253,7 @@ export function ProductForm({ product }: { product?: Product }) {
               type="button"
               className="btn small"
               style={{ marginBottom: 28 }}
-              onClick={() => setVariants((l) => [...l, { key: key(), color: "", hex: "#d9d9d9", sku: "", stock: "0", price: "" }])}
+              onClick={() => setVariants((l) => [...l, { key: key(), color: "", size: "", hex: "#c4b48a", sku: "", stock: "0", price: "" }])}
             >
               ＋ 新增顏色
             </button>
@@ -278,7 +337,6 @@ export function ProductForm({ product }: { product?: Product }) {
             <div className="photos">
               {photos.map((src, i) => (
                 <div className="photo" key={src}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={src} alt="" />
                   {i === 0 && <span className="cover">封面</span>}
                   <div className="photo-actions">

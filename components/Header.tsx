@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { getStore } from "@/lib/store";
+import { getCatalogStore } from "@/lib/store";
 import { CartBadge } from "./CartBadge";
 
 export async function Header() {
-  const { settings } = await getStore();
+  const { settings } = await getCatalogStore();
   return (
     <>
       {settings.announcement && <div className="announce">{settings.announcement}</div>}
@@ -14,7 +14,6 @@ export async function Header() {
             <Link href="/orders">我的訂單</Link>
           </nav>
           <Link href="/" className="brand-logo" aria-label={settings.shopName}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo-mark.png" alt={settings.shopName} width={56} height={56} />
           </Link>
           <div className="mast-tools">

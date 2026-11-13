@@ -10,7 +10,6 @@ export default async function SetupPage() {
     <div className="login-wrap">
       <div className="login-box">
         <div className="brand-logo login-logo">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo-mark.png" alt="Radiant" width={64} height={64} />
         </div>
         <div className="sub">FIRST-TIME SETUP</div>

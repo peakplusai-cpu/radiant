@@ -1,74 +1,52 @@
 import { NextResponse } from "next/server";
 import { getStore } from "@/lib/store";
 import { getLineIdentity, lineLoginEnabled } from "@/lib/line";
-import { enabledPickupPoints } from "@/lib/pickup";
-import { placeOrder, type CartLine } from "@/lib/orders";
-import type { Fulfillment } from "@/lib/types";
-
-function text(value: unknown, max: number): string {
-  return typeof value === "string" ? value.trim().slice(0, max) : "";
-}
+import { placeOrder } from "@/lib/orders";
+import { parseCheckoutBody, resolveCheckoutIdentity } from "@/lib/checkout";
+import { clientIp, sameOrigin } from "@/lib/http";
+import { rateLimit } from "@/lib/rate-limit";
+import { grantReceipt } from "@/lib/receipt";
 
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
-  if (!body) return NextResponse.json({ error: "資料格式不正確" }, { status: 400 });
+  if (!sameOrigin(request.headers)) {
+    return NextResponse.json({ error: "無法送出訂單" }, { status: 403 });
+  }
+  const limit = rateLimit(`checkout:${clientIp(request.headers)}`, 8, 10 * 60 * 1000);
+  if (!limit.ok) {
+    return NextResponse.json({ error: "送出太頻繁，請稍後再試" }, { status: 429, headers: { "Retry-After": String(limit.retryAfter) } });
+  }
+
+  const body = await request.json().catch(() => null);
+  const parsed = parseCheckoutBody(body);
+  if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
   const { settings } = await getStore();
-  const identity = await getLineIdentity();
-  const loginRequired = lineLoginEnabled(settings);
-
-  if (loginRequired && !identity) {
-    return NextResponse.json({ error: "請先使用 LINE 登入" }, { status: 401 });
-  }
-
-  const recipient = text(body.recipient, 60);
-  const phone = text(body.phone, 30);
-  const address = text(body.address, 200);
-  const fulfillment: Fulfillment = text(body.fulfillment, 20) === "pickup" ? "pickup" : "delivery";
-  const pickupPointId = text(body.pickupPointId, 80);
-
-  if (!recipient || !phone) {
-    return NextResponse.json({ error: "請填寫姓名與電話" }, { status: 400 });
-  }
-  if (fulfillment === "pickup") {
-    const point = enabledPickupPoints(settings).find((p) => p.id === pickupPointId);
-    if (!point) return NextResponse.json({ error: "請選擇自取地點" }, { status: 400 });
-  } else if (!address) {
-    return NextResponse.json({ error: "請完整填寫收件人、電話與地址" }, { status: 400 });
-  }
-
-  let lineName = identity?.name ?? "";
-  let lineId = text(body.lineId, 60).replace(/^@/, "");
-  if (!identity) {
-    lineName = text(body.lineName, 60);
-    if (!lineName || !lineId) {
-      return NextResponse.json({ error: "請填寫 LINE 名稱與 LINE ID" }, { status: 400 });
-    }
-  }
-
-  const rawLines = Array.isArray(body.items) ? (body.items as Record<string, unknown>[]) : [];
-  const lines: CartLine[] = rawLines.slice(0, 50).map((l) => ({
-    productId: text(l.productId, 60),
-    variantId: text(l.variantId, 60),
-    qty: Number(l.qty),
-  }));
-
-  const result = await placeOrder({
-    lines,
-    recipient,
-    phone,
-    address,
-    fulfillment,
-    pickupPointId,
-    note: text(body.note, 300),
-    identity: {
-      lineUserId: identity?.userId ?? "",
-      lineName,
-      lineId,
-      verified: Boolean(identity),
-    },
+  const session = await getLineIdentity();
+  const identity = resolveCheckoutIdentity({
+    loginRequired: lineLoginEnabled(settings),
+    session,
+    recipient: parsed.data.recipient,
+    phone: parsed.data.phone,
   });
+  if (!identity.ok) return NextResponse.json({ error: identity.error }, { status: identity.status });
 
-  if (!result.ok) return NextResponse.json({ error: result.error }, { status: 409 });
-  return NextResponse.json({ code: result.order.code, token: result.order.token });
+  try {
+    const result = await placeOrder({
+      lines: parsed.data.items,
+      recipient: parsed.data.recipient,
+      phone: parsed.data.phone,
+      address: parsed.data.address,
+      fulfillment: parsed.data.fulfillment,
+      pickupPointId: parsed.data.pickupPointId,
+      note: parsed.data.note,
+      idempotencyKey: parsed.data.idempotencyKey,
+      identity: identity.identity,
+    });
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: 409 });
+    await grantReceipt(result.order.code);
+    return NextResponse.json({ code: result.order.code });
+  } catch {
+    console.error("checkout failed");
+    return NextResponse.json({ error: "系統忙碌，請稍後再試" }, { status: 500 });
+  }
 }
