@@ -1,12 +1,13 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import { randomBytes } from "crypto";
-import type { Customer, Order, OrderItem, Product, Settings, Store } from "./types";
+import type { Customer, Order, OrderItem, Product, PromoClaim, PromoUse, Settings, Store } from "./types";
 import { supabaseAdmin, supabaseConfigured, supabaseUrl } from "./supabase";
 import { sanitizePickupPoints } from "./pickup";
 import { sanitizeWall } from "./wall";
 import { migrateProduct } from "./variants";
 import { DEFAULT_CVS_FEE, DEFAULT_FREE_SHIPPING, DEFAULT_SHIPPING_FEE } from "./pricing";
+import { normalizeApplied, normalizePromotion } from "./promos";
 
 if (typeof window !== "undefined") {
   throw new Error("lib/store.ts is server-only");
@@ -81,6 +82,34 @@ function normalizeOrder(order: Partial<Order>): Order {
     pickupPointId: typeof order.pickupPointId === "string" ? order.pickupPointId : "",
     pickupPointName: typeof order.pickupPointName === "string" ? order.pickupPointName : "",
     items: (order.items ?? []).map(normalizeItem),
+    discount: Number.isFinite(order.discount) ? Math.max(0, Math.round(order.discount as number)) : 0,
+    appliedPromos: normalizeApplied(order.appliedPromos),
+  };
+}
+
+function normalizeClaim(claim: Partial<PromoClaim>): PromoClaim | null {
+  if (!claim || typeof claim.id !== "string" || typeof claim.promoId !== "string") return null;
+  return {
+    id: claim.id.slice(0, 80),
+    promoId: claim.promoId.slice(0, 80),
+    guestToken: typeof claim.guestToken === "string" ? claim.guestToken.slice(0, 80) : "",
+    lineUserId: typeof claim.lineUserId === "string" ? claim.lineUserId.slice(0, 80) : "",
+    createdAt: typeof claim.createdAt === "string" ? claim.createdAt : "",
+  };
+}
+
+function normalizeUse(use: Partial<PromoUse>): PromoUse | null {
+  if (!use || typeof use.id !== "string" || typeof use.promoId !== "string" || typeof use.orderId !== "string") return null;
+  return {
+    id: use.id.slice(0, 80),
+    promoId: use.promoId.slice(0, 80),
+    orderId: use.orderId.slice(0, 80),
+    phone: typeof use.phone === "string" ? use.phone.slice(0, 20) : "",
+    email: typeof use.email === "string" ? use.email.slice(0, 80) : "",
+    lineUserId: typeof use.lineUserId === "string" ? use.lineUserId.slice(0, 80) : "",
+    discount: Number.isFinite(use.discount) ? Math.max(0, Math.round(use.discount as number)) : 0,
+    restored: Boolean(use.restored),
+    createdAt: typeof use.createdAt === "string" ? use.createdAt : "",
   };
 }
 
@@ -108,6 +137,9 @@ function normalize(parsed: Partial<Store>): Store {
     customers: (parsed.customers ?? []).map(normalizeCustomer),
     orders: (parsed.orders ?? []).map(normalizeOrder),
     wallPhotos: sanitizeWall(parsed.wallPhotos),
+    promotions: (parsed.promotions ?? []).map((promo) => normalizePromotion(promo)).filter((promo): promo is NonNullable<typeof promo> => Boolean(promo)),
+    promoClaims: (parsed.promoClaims ?? []).map(normalizeClaim).filter((claim): claim is PromoClaim => Boolean(claim)).slice(-5000),
+    promoUses: (parsed.promoUses ?? []).map(normalizeUse).filter((use): use is PromoUse => Boolean(use)),
     idempotency: (parsed.idempotency ?? []).slice(-200),
     loginBuckets: (parsed.loginBuckets ?? []).slice(-100),
   };

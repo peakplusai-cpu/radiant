@@ -77,6 +77,74 @@ export type OrderItem = {
   photo: string;
 };
 
+export type PromoScope = "site" | "product" | "category";
+/** percent: 百分比折（20 = 打八折）. amount: 固定折抵. threshold: 滿額折一次. */
+export type PromoKind = "percent" | "amount" | "threshold";
+/** best: 只取最划算的一檔. stack: 可與其他可累加活動併用. */
+export type PromoStacking = "best" | "stack";
+
+export type Promotion = {
+  id: string;
+  name: string;
+  banner: string;
+  enabled: boolean;
+  scope: PromoScope;
+  productId: string;
+  category: string;
+  kind: PromoKind;
+  /** percent 為折掉的百分比（1–100）；amount / threshold 為折抵的整數元. */
+  value: number;
+  /** 適用商品金額門檻。滿額折的「滿額」也用這個欄位。0 表示不限. */
+  minSpend: number;
+  /** 單筆折扣上限。0 表示不設上限. */
+  maxDiscount: number;
+  freeShipping: boolean;
+  /** ISO，含開始、不含結束。後台以台北時間輸入. */
+  startsAt: string;
+  endsAt: string;
+  /** 0 表示不限次數. */
+  usageLimit: number;
+  used: number;
+  /** 0 表示同一顧客不限。以手機、Email、LINE User ID 任一相同即視為同一人. */
+  perCustomer: number;
+  requiresClaim: boolean;
+  /** 空字串表示不需要代碼。儲存時已轉成大寫. */
+  couponCode: string;
+  stacking: PromoStacking;
+  priority: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PromoClaim = {
+  id: string;
+  promoId: string;
+  guestToken: string;
+  lineUserId: string;
+  createdAt: string;
+};
+
+export type PromoUse = {
+  id: string;
+  promoId: string;
+  orderId: string;
+  phone: string;
+  email: string;
+  lineUserId: string;
+  discount: number;
+  restored: boolean;
+  createdAt: string;
+};
+
+export type AppliedPromo = {
+  id: string;
+  name: string;
+  code: string;
+  kind: PromoKind;
+  discount: number;
+  freeShipping: boolean;
+};
+
 export type Customer = {
   id: string;
   lineUserId: string;
@@ -129,6 +197,9 @@ export type Order = {
   note: string;
   items: OrderItem[];
   subtotal: number;
+  /** 本單折抵，由伺服器計算。客戶無法自行指定. */
+  discount: number;
+  appliedPromos: AppliedPromo[];
   shipping: number;
   total: number;
   status: OrderStatus;
@@ -188,6 +259,9 @@ export type Store = {
   customers: Customer[];
   orders: Order[];
   wallPhotos: WallPhoto[];
+  promotions: Promotion[];
+  promoClaims: PromoClaim[];
+  promoUses: PromoUse[];
   idempotency: IdempotencyRecord[];
   loginBuckets: LoginBucket[];
 };

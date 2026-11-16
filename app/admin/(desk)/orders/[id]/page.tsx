@@ -37,7 +37,7 @@ export default async function OrderAdmin({
       </div>
       {updated && <div className="notice" style={{ marginBottom: 24 }}>訂單已更新。</div>}
       {error && <div className="notice error" style={{ marginBottom: 24 }}>狀態無法這樣變更。若客戶還沒付款或選擇門市，請等待付款完成，或先取消訂單。</div>}
-      {cancelled && <div className="notice" style={{ marginBottom: 24 }}>訂單已取消，庫存已加回商品。</div>}
+      {cancelled && <div className="notice" style={{ marginBottom: 24 }}>訂單已取消，庫存與優惠使用次數已加回。</div>}
 
       <div className="form-grid">
         <OrderReceipt order={order} staff />

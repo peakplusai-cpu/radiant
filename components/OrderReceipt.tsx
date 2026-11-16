@@ -39,6 +39,12 @@ export function OrderReceipt({ order, showAddress = true, staff = false }: { ord
           <span>商品小計</span>
           <span>{formatPrice(order.subtotal)}</span>
         </div>
+        {order.discount > 0 && (
+          <div className="sum-row discount">
+            <span>折扣{order.appliedPromos.length ? ` · ${order.appliedPromos.map((promo) => promo.name).join("、")}` : ""}</span>
+            <span>-{formatPrice(order.discount)}</span>
+          </div>
+        )}
         <div className="sum-row">
           <span>{order.fulfillment === "pickup" ? "運費（自取）" : order.fulfillment === "cvs" ? "運費（超商店到店）" : "運費"}</span>
           <span>{order.shipping === 0 ? "免運" : formatPrice(order.shipping)}</span>

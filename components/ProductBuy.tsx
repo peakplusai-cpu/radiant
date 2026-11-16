@@ -2,13 +2,16 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import type { Product, Variant } from "@/lib/types";
+import type { Product, Promotion, Variant } from "@/lib/types";
+import type { QuoteSettings } from "@/lib/promos";
+import { unitDeal } from "@/lib/promos";
 import { formatPrice } from "@/lib/format";
 import { addToCart } from "@/lib/cart-client";
 import { groupVariants } from "@/lib/variants";
 import { ProductImage } from "./ProductImage";
+import { useServerNow } from "./useServerNow";
 
-export function ProductBuy({ product }: { product: Product }) {
+export function ProductBuy({ product, promos = [], serverNow = 0, shipping }: { product: Product; promos?: Promotion[]; serverNow?: number; shipping?: QuoteSettings }) {
   const groups = useMemo(() => groupVariants(product.variants), [product.variants]);
   const firstColor = Math.max(0, groups.findIndex((group) => group.sizes.some((size) => size.stock > 0)));
   const [colorIndex, setColorIndex] = useState(firstColor === -1 ? 0 : firstColor);
@@ -23,8 +26,15 @@ export function ProductBuy({ product }: { product: Product }) {
   const [error, setError] = useState("");
 
   const price = variant ? (variant.price ?? product.price) : product.price;
+  const now = useServerNow(serverNow || Date.now());
+  const ship = shipping ?? { shippingFee: 70, freeShippingThreshold: 2000, cvsShippingFee: 65 };
+  const deal = useMemo(
+    () => (promos.length ? unitDeal(product, price, promos, ship, now) : null),
+    [product, price, promos, ship, now]
+  );
   const soldOut = !variant || variant.stock <= 0;
-  const onSale = product.comparePrice > price;
+  const pay = deal && deal.min < price ? deal.min : price;
+  const strike = deal && deal.min < price ? deal.compare : product.comparePrice > price ? product.comparePrice : 0;
   const max = Math.max(1, Math.min(variant?.stock ?? 1, 99));
   const photos = product.photos;
 
@@ -75,8 +85,9 @@ export function ProductBuy({ product }: { product: Product }) {
         {product.subtitle && <p className="sub">{product.subtitle}</p>}
 
         <div className="price-line">
-          <span>{formatPrice(price)}</span>
-          {onSale && <s>{formatPrice(product.comparePrice)}</s>}
+          <span>{formatPrice(pay)}</span>
+          {strike > pay && <s>{formatPrice(strike)}</s>}
+          {deal && <span className="deal-badge">{deal.badge}</span>}
           {product.sold > 0 && <span className="sold">已售 {product.sold}</span>}
         </div>
 

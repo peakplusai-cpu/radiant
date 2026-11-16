@@ -3,11 +3,14 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import type { Product } from "@/lib/types";
+import type { Product, Promotion } from "@/lib/types";
+import { displayDeal, scopedBanner, type QuoteSettings } from "@/lib/promos";
 import { effectiveCategories } from "@/lib/categories";
 import { isSoldOut } from "@/lib/products";
 import { parseSort, sortProducts, type SortKey } from "@/lib/sort";
 import { ProductCard } from "./ProductCard";
+import { PromoBanner } from "./PromoBanner";
+import { useServerNow } from "./useServerNow";
 
 const TABS: { key: SortKey | "price"; label: string }[] = [
   { key: "pop", label: "綜合排序" },
@@ -25,9 +28,22 @@ function href(params: { sort?: string; q?: string; cat?: string }): string {
   return qs ? `/?${qs}` : "/";
 }
 
-export function Catalog({ products, flush }: { products: Product[]; flush: boolean }) {
+export function Catalog({
+  products,
+  flush,
+  promos = [],
+  serverNow,
+  shipping,
+}: {
+  products: Product[];
+  flush: boolean;
+  promos?: Promotion[];
+  serverNow: number;
+  shipping: QuoteSettings;
+}) {
   const params = useSearchParams();
   const router = useRouter();
+  const now = useServerNow(serverNow);
   const sort = parseSort(params.get("sort") ?? undefined);
   const q = (params.get("q") ?? "").trim();
   const cat = (params.get("cat") ?? "").trim();
@@ -40,6 +56,13 @@ export function Catalog({ products, flush }: { products: Product[]; flush: boole
       return stock(b) - stock(a) || a.localeCompare(b, "zh-Hant");
     });
   }, [products]);
+
+  const deals = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof displayDeal>>();
+    for (const product of products) map.set(product.id, displayDeal(product, promos, shipping, now));
+    return map;
+  }, [products, promos, shipping, now]);
+  const categoryBanner = cat ? scopedBanner(promos, "category", cat, now) : null;
 
   const needle = q.toLowerCase();
   const filtered = products.filter(
@@ -83,6 +106,8 @@ export function Catalog({ products, flush }: { products: Product[]; flush: boole
         </form>
       </div>
 
+      {categoryBanner && <PromoBanner promo={categoryBanner} serverNow={now} />}
+
       {categories.length > 0 && (
         <nav className="cats" aria-label="分類">
           <Link href={href({ sort, q })} className={!cat ? "on" : ""}>全部</Link>
@@ -102,7 +127,7 @@ export function Catalog({ products, flush }: { products: Product[]; flush: boole
       {visible.length ? (
         <section className="grid" aria-label="商品列表">
           {visible.map((product, index) => (
-            <ProductCard key={product.id} product={product} index={index} />
+            <ProductCard key={product.id} product={product} index={index} deal={deals.get(product.id)} />
           ))}
         </section>
       ) : (

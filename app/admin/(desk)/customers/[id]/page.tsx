@@ -37,6 +37,7 @@ export default async function CustomerAdmin({
   const mergedItems = [...merged.values()];
   const mergedQty = mergedItems.reduce((s, i) => s + i.qty, 0);
   const itemsTotal = open.reduce((s, o) => s + o.subtotal, 0);
+  const discountTotal = open.reduce((s, o) => s + o.discount, 0);
   const shippingTotal = open.reduce((s, o) => s + o.shipping, 0);
   const collectTotal = open.filter((o) => o.paymentMethod === "line").reduce((s, o) => s + o.total, 0);
   const prepaidTotal = open.reduce((s, o) => s + o.total, 0) - collectTotal;
@@ -100,6 +101,12 @@ export default async function CustomerAdmin({
                 <dl className="kv" style={{ marginBottom: 20 }}>
                   <dt>商品合計</dt>
                   <dd>{formatPrice(itemsTotal)}</dd>
+                  {discountTotal > 0 && (
+                    <>
+                      <dt>折扣</dt>
+                      <dd>-{formatPrice(discountTotal)}</dd>
+                    </>
+                  )}
                   <dt>已收運費</dt>
                   <dd>
                     {formatPrice(shippingTotal)}

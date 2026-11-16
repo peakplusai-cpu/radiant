@@ -162,6 +162,81 @@ test("returning from NewebPay with a signed form lands on the order page", async
   await expect(page.locator(".status-pill")).toHaveText("待出貨（取貨付款）");
 });
 
+test("admin promotion reaches the storefront and an expired one is rejected", async ({ page, request, baseURL }) => {
+  await page.goto("/admin/login");
+  await page.getByLabel("密碼").fill("e2e-password");
+  await page.getByRole("button", { name: "登入" }).click();
+  await expect(page).toHaveURL(/\/admin$/);
+
+  const taipei = (offsetMs: number) => new Date(Date.now() + offsetMs + 8 * 60 * 60 * 1000).toISOString().slice(0, 16);
+  await page.goto("/admin/promotions/new");
+  await page.locator('input[name="name"]').fill("週年慶");
+  await page.locator('input[name="banner"]').fill("全館 8 折");
+  await page.locator('input[name="value"]').fill("20");
+  await page.locator('input[name="startsAt"]').fill(taipei(-60 * 60 * 1000));
+  await page.locator('input[name="endsAt"]').fill(taipei(2 * 60 * 60 * 1000));
+  await page.locator('input[name="requiresClaim"]').check();
+  await page.getByRole("button", { name: "儲存活動" }).click();
+  await expect(page.getByRole("heading", { name: "優惠活動" })).toBeVisible();
+  await expect(page.getByText("進行中")).toBeVisible();
+
+  await page.goto("/");
+  const banner = page.locator(".promo-banner");
+  await expect(banner).toContainText("全館 8 折");
+  await expect(banner.getByRole("timer")).toContainText(/\d{2}:\d{2}:\d{2}/);
+  const promoId = await banner.getAttribute("data-promo-id");
+  expect(promoId).toBeTruthy();
+
+  await page.getByRole("link", { name: /測試珍珠上衣/ }).click();
+  await expect(page.locator(".price-line")).toContainText("NT$ 864");
+  await expect(page.locator(".price-line s")).toBeVisible();
+  await page.getByRole("button", { name: "領取折扣" }).click();
+  await expect(page.getByRole("button", { name: "已領取" })).toBeVisible();
+  const guest = await page.evaluate(() => localStorage.getItem("radiant.promo.guest"));
+  expect(guest).toMatch(/^[A-Za-z0-9_-]{16,80}$/);
+
+  await page.getByRole("radio", { name: "L" }).click();
+  await page.getByRole("button", { name: "加入購物袋" }).click();
+  await page.goto("/cart");
+  await expect(page.getByText("折扣 · 週年慶")).toBeVisible();
+  await expect(page.getByText("-NT$ 216")).toBeVisible();
+  await expect(page.locator(".sum-row.total")).toContainText("NT$ 934");
+
+  await page.getByRole("link", { name: "前往結帳" }).click();
+  await expect(page.getByRole("button", { name: /前往付款 · NT\$ 934/ })).toBeVisible();
+
+  await page.goto(`/admin/promotions/${promoId}`);
+  await page.locator('input[name="startsAt"]').fill(taipei(-2 * 60 * 60 * 1000));
+  await page.locator('input[name="endsAt"]').fill(taipei(-60 * 60 * 1000));
+  await page.getByRole("button", { name: "儲存活動" }).click();
+  await expect(page.getByText("活動已儲存")).toBeVisible();
+  await expect(page.getByText("已結束")).toBeVisible();
+
+  const rejected = await request.post("/api/checkout", {
+    headers: { origin: baseURL ?? "http://127.0.0.1:3100" },
+    data: {
+      items: [{ productId: "prd_top", variantId: "var_coffee_L", qty: 1 }],
+      recipient: "測試客人",
+      phone: "0912000111",
+      email: "promo@example.com",
+      address: "台北市大安區復興南路一段1號",
+      fulfillment: "delivery",
+      payment: "online",
+      pickupPointId: "",
+      idempotencyKey: "promoexpired1",
+      guestToken: guest,
+      shownPromoIds: [promoId],
+    },
+  });
+  expect(rejected.status()).toBe(409);
+  expect((await rejected.json()).error).toContain("已結束");
+
+  await page.goto("/p/prd_top");
+  await expect(page.locator(".price-line")).toContainText("NT$ 1,080");
+  await expect(page.locator(".price-line")).not.toContainText("NT$ 864");
+  await expect(page.locator(".promo-banner")).toHaveCount(0);
+});
+
 test("pay start refuses cross-site requests and unknown orders", async ({ request, baseURL }) => {
   const noOrigin = await request.post("/api/pay/start", { data: { code: "RDPAYTEST", token: "paytok" } });
   expect(noOrigin.status()).toBe(403);
