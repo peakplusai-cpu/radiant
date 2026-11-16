@@ -252,6 +252,161 @@ h3 {
   color: var(--teal-deep);
 }
 
+.promo-stack {
+  display: grid;
+}
+
+.promo-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 12px var(--gutter);
+  background: var(--ink);
+  color: #fff;
+}
+
+.promo-banner.upcoming {
+  background: var(--teal-deep);
+}
+
+.promo-banner.ended {
+  background: #5c6766;
+}
+
+.promo-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 180px;
+}
+
+.promo-copy strong {
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  font-size: 15px;
+}
+
+.promo-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+
+.promo-count {
+  display: grid;
+  justify-items: flex-end;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+}
+
+.promo-count small {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  opacity: 0.75;
+}
+
+.promo-count b {
+  font-weight: 500;
+  font-size: 18px;
+}
+
+.promo-claim {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid #fff;
+  background: transparent;
+  color: #fff;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+}
+
+.promo-claim:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.promo-error {
+  flex: 1 0 100%;
+  color: #ffd2cb;
+  font-size: 13px;
+}
+
+.deal-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--teal-deep);
+  color: #fff;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  line-height: 1;
+}
+
+.promo-banner .deal-badge {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.price-line .deal-badge,
+.card-price .deal-badge {
+  font-family: var(--sans);
+}
+
+.sum-row.discount {
+  color: var(--teal-deep);
+}
+
+.coupon-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0 2px;
+  font-size: 13px;
+}
+
+.coupon-row span:last-child {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.coupon-row input {
+  width: 120px;
+  border: 0;
+  border-bottom: 1px solid var(--teal-soft);
+  background: transparent;
+  padding: 4px 0;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.coupon-row button {
+  border: 0;
+  background: transparent;
+  color: var(--teal-deep);
+  cursor: pointer;
+  letter-spacing: 0.08em;
+}
+
+@media (max-width: 700px) {
+  .promo-count {
+    justify-items: flex-start;
+  }
+  .coupon-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
 .masthead {
   position: sticky;
   top: 0;

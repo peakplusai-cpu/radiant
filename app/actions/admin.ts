@@ -18,6 +18,7 @@ import { clearLoginFailures, hashClient, loginLockMessage, recordLoginFailure } 
 import { randomBase32, totpUri, verifyTotp } from "@/lib/totp";
 import { resolveHex } from "@/lib/colors";
 import { variantLabel } from "@/lib/variants";
+import { sanitizePromotion, taipeiInputToIso } from "@/lib/promos";
 import type { Detail, OrderStatus, Product, Variant } from "@/lib/types";
 
 async function guard(): Promise<void> {
@@ -322,6 +323,80 @@ export async function testPush(_prev: string): Promise<string> {
   if (!settings.notifyTo) return "請先填入「店家通知對象」並儲存";
   const ok = await pushLine(settings.notifyTo, "Radiant 測試訊息：LINE 官方帳號已成功連接。");
   return ok ? "已送出測試訊息，請到 LINE 查看" : "推播失敗，請確認 Messaging API 權杖與通知對象 ID";
+}
+
+export async function savePromotion(_prev: string, form: FormData): Promise<string> {
+  await guard();
+  const id = str(form, "id", 80);
+  const startsAt = taipeiInputToIso(str(form, "startsAt", 20));
+  const endsAt = taipeiInputToIso(str(form, "endsAt", 20));
+  if (!startsAt || !endsAt) return "請填寫開始與結束時間（台北時間）";
+  const parsed = sanitizePromotion({
+    name: str(form, "name", 40),
+    banner: str(form, "banner", 80),
+    enabled: form.get("enabled") === "1",
+    scope: str(form, "scope", 20),
+    productId: str(form, "productId", 80),
+    category: str(form, "category", 40),
+    kind: str(form, "kind", 20),
+    value: num(str(form, "value", 12)),
+    minSpend: num(str(form, "minSpend", 12)),
+    maxDiscount: num(str(form, "maxDiscount", 12)),
+    freeShipping: form.get("freeShipping") === "1",
+    startsAt,
+    endsAt,
+    usageLimit: num(str(form, "usageLimit", 12)),
+    perCustomer: num(str(form, "perCustomer", 12)),
+    requiresClaim: form.get("requiresClaim") === "1",
+    couponCode: str(form, "couponCode", 20),
+    stacking: str(form, "stacking", 20),
+    priority: num(str(form, "priority", 8)),
+  });
+  if (!parsed.ok) return parsed.error;
+  const now = new Date().toISOString();
+  try {
+    await mutate((store) => {
+      const existing = id ? store.promotions.find((promo) => promo.id === id) : undefined;
+      if (id && !existing) throw new Error("MISSING");
+      if (parsed.promo.scope === "product" && !store.products.some((product) => product.id === parsed.promo.productId)) throw new Error("PRODUCT");
+      if (parsed.promo.couponCode && store.promotions.some((promo) => promo.id !== existing?.id && promo.couponCode === parsed.promo.couponCode)) {
+        throw new Error("CODE");
+      }
+      if (!existing && store.promotions.length >= 100) throw new Error("LIMIT");
+      const next = {
+        ...parsed.promo,
+        id: existing?.id ?? uid("prm"),
+        used: existing?.used ?? 0,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      };
+      if (existing) Object.assign(existing, next);
+      else store.promotions.push(next);
+    });
+  } catch (err) {
+    if (err instanceof StorageError) return err.message;
+    if (err instanceof Error && err.message === "MISSING") return "找不到這個活動，請重新整理";
+    if (err instanceof Error && err.message === "PRODUCT") return "請選擇仍存在的商品";
+    if (err instanceof Error && err.message === "CODE") return "這個優惠代碼已經被其他活動使用";
+    if (err instanceof Error && err.message === "LIMIT") return "優惠活動最多 100 檔，請先停用不再使用的活動";
+    throw err;
+  }
+  revalidatePath("/", "layout");
+  redirect("/admin/promotions?saved=1");
+}
+
+export async function setPromotionEnabled(form: FormData): Promise<void> {
+  await guard();
+  const id = str(form, "id", 80);
+  const enabled = str(form, "enabled", 5) === "1";
+  await mutate((store) => {
+    const promo = store.promotions.find((item) => item.id === id);
+    if (!promo) return;
+    promo.enabled = enabled;
+    promo.updatedAt = new Date().toISOString();
+  });
+  revalidatePath("/", "layout");
+  redirect("/admin/promotions");
 }
 
 export async function beginTotp(): Promise<string> {

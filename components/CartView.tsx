@@ -4,8 +4,11 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { formatPrice } from "@/lib/format";
 import { changeQty, onCartChange, readCart, removeFromCart, writeCart, type CartEntry } from "@/lib/cart-client";
+import { onPromoChange, readCoupon, readGuestToken, writeCoupon } from "@/lib/promo-client";
 import { variantLabel } from "@/lib/variants";
+import type { Fulfillment } from "@/lib/types";
 import { ProductImage } from "./ProductImage";
+import { useServerNow } from "./useServerNow";
 
 export type CartLineView = {
   productId: string;
@@ -20,27 +23,63 @@ export type CartLineView = {
   qty: number;
 };
 
-export type CartData = { lines: CartLineView[]; shippingFee: number; cvsShippingFee: number; freeShippingThreshold: number };
+export type CartQuote = {
+  subtotal: number;
+  discount: number;
+  shipping: number;
+  total: number;
+  applied: { id: string; name: string; discount: number; freeShipping: boolean; endsAt: string }[];
+  hints: { text: string }[];
+  couponMessage: string;
+  serverNow: number;
+};
 
-export function useCart() {
+export type CartData = {
+  lines: CartLineView[];
+  shippingFee: number;
+  cvsShippingFee: number;
+  freeShippingThreshold: number;
+  quote: CartQuote;
+};
+
+function emptyQuote(): CartQuote {
+  return { subtotal: 0, discount: 0, shipping: 0, total: 0, applied: [], hints: [], couponMessage: "", serverNow: Date.now() };
+}
+
+export function useCart(fulfillment: Fulfillment = "delivery", contact?: { phone?: string; email?: string }) {
+  const phone = contact?.phone ?? "";
+  const email = contact?.email ?? "";
+  const [slowPhone, setSlowPhone] = useState(phone);
+  const [slowEmail, setSlowEmail] = useState(email);
+  const [coupon, setCouponValue] = useState("");
   const [data, setData] = useState<CartData | null>(null);
   const [dropped, setDropped] = useState(false);
   const requestId = useRef(0);
 
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      setSlowPhone(phone);
+      setSlowEmail(email);
+    }, 400);
+    return () => window.clearTimeout(id);
+  }, [phone, email]);
+
   const load = useCallback(async () => {
     const items = readCart();
     const id = ++requestId.current;
+    const code = readCoupon();
     if (!items.length) {
-      if (id === requestId.current) setData({ lines: [], shippingFee: 0, cvsShippingFee: 0, freeShippingThreshold: 0 });
+      if (id === requestId.current) setData({ lines: [], shippingFee: 0, cvsShippingFee: 0, freeShippingThreshold: 0, quote: emptyQuote() });
       return;
     }
     const res = await fetch("/api/cart", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items }),
+      body: JSON.stringify({ items, fulfillment, coupon: code, guestToken: readGuestToken(), phone: slowPhone, email: slowEmail }),
     });
     if (id !== requestId.current) return;
     const json = (await res.json()) as CartData;
+    if (!res.ok || !json.lines) return;
     const latest = readCart();
     const valid = new Set(json.lines.map((line) => `${line.productId}:${line.variantId}`));
     const cleaned = latest.filter((item) => valid.has(`${item.p}:${item.v}`));
@@ -52,45 +91,122 @@ export function useCart() {
     const qtyOf = new Map(latest.map((item) => [`${item.p}:${item.v}`, item.q]));
     setData({
       ...json,
+      quote: json.quote ?? emptyQuote(),
       lines: json.lines.map((line) => ({ ...line, qty: qtyOf.get(`${line.productId}:${line.variantId}`) ?? line.qty })),
     });
-  }, []);
+  }, [fulfillment, slowPhone, slowEmail]);
 
   useEffect(() => {
+    setCouponValue(readCoupon());
     void load();
-    return onCartChange(() => void load());
+    const stopCart = onCartChange(() => void load());
+    const stopPromo = onPromoChange(() => {
+      setCouponValue(readCoupon());
+      void load();
+    });
+    return () => {
+      stopCart();
+      stopPromo();
+    };
   }, [load]);
 
-  return { data, dropped, reload: load, setData };
+  const now = useServerNow(data?.quote.serverNow ?? Date.now());
+  const expiry = (data?.quote.applied ?? []).map((item) => item.endsAt).join("|");
+  useEffect(() => {
+    if (!expiry) return;
+    const nearest = Math.min(...expiry.split("|").map((item) => Date.parse(item)).filter((item) => Number.isFinite(item)));
+    if (!Number.isFinite(nearest)) return;
+    const wait = Math.max(800, nearest - now + 400);
+    const id = window.setTimeout(() => void load(), wait);
+    return () => window.clearTimeout(id);
+  }, [expiry, now, load]);
+
+  const setCoupon = useCallback((code: string) => {
+    writeCoupon(code);
+    setCouponValue(code.trim().slice(0, 20));
+  }, []);
+
+  return { data, dropped, reload: load, setData, coupon, setCoupon };
 }
 
-export function totals(data: CartData, opts?: { pickup?: boolean; cvs?: boolean }) {
-  const subtotal = data.lines.reduce((sum, line) => sum + line.price * line.qty, 0);
-  const free = data.freeShippingThreshold > 0 && subtotal >= data.freeShippingThreshold;
-  const fee = opts?.cvs ? data.cvsShippingFee : data.shippingFee;
-  const shipping = opts?.pickup || data.lines.length === 0 || free ? 0 : fee;
-  return { subtotal, shipping, total: subtotal + shipping };
-}
-
-export function SummaryRows({ data, pickup = false, cvs = false }: { data: CartData; pickup?: boolean; cvs?: boolean }) {
-  const { subtotal, shipping, total } = totals(data, { pickup, cvs });
+export function SummaryRows({
+  data,
+  pickup = false,
+  cvs = false,
+  coupon = "",
+  onCoupon,
+}: {
+  data: CartData;
+  pickup?: boolean;
+  cvs?: boolean;
+  coupon?: string;
+  onCoupon?: (code: string) => void;
+}) {
+  const quote = data.quote ?? emptyQuote();
+  const { subtotal, discount, shipping, total, applied, hints, couponMessage } = quote;
   const remain = data.freeShippingThreshold - subtotal;
+  const promoFree = applied.some((item) => item.freeShipping);
+  const [draft, setDraft] = useState(coupon);
+  useEffect(() => setDraft(coupon), [coupon]);
+
   return (
     <>
       <div className="sum-row">
         <span>商品小計</span>
         <span>{formatPrice(subtotal)}</span>
       </div>
+      {applied.map((item) => (
+        <div className="sum-row discount" key={item.id}>
+          <span>折扣 · {item.name}</span>
+          <span>{item.discount > 0 ? `-${formatPrice(item.discount)}` : "已套用"}</span>
+        </div>
+      ))}
+      {discount > 0 && applied.length > 1 && (
+        <div className="sum-row discount">
+          <span>折扣合計</span>
+          <span>-{formatPrice(discount)}</span>
+        </div>
+      )}
       <div className="sum-row">
         <span>{pickup ? "運費（自取）" : cvs ? "運費（超商店到店）" : "運費"}</span>
-        <span>{shipping === 0 ? "免運" : formatPrice(shipping)}</span>
+        <span>{shipping === 0 ? (promoFree ? "免運（活動）" : "免運") : formatPrice(shipping)}</span>
       </div>
-      {!pickup && data.freeShippingThreshold > 0 && remain > 0 && data.lines.length > 0 && (
+      {!pickup && !promoFree && data.freeShippingThreshold > 0 && remain > 0 && data.lines.length > 0 && (
         <div className="sum-row">
           <small>再購買 {formatPrice(remain)} 即享免運</small>
         </div>
       )}
-      <div className="sum-row total">
+      {hints.map((hint) => (
+        <div className="sum-row" key={hint.text}>
+          <small>{hint.text}</small>
+        </div>
+      ))}
+      {onCoupon && (
+        <label className="coupon-row">
+          <span>優惠代碼</span>
+          <span>
+            <input
+              value={draft}
+              maxLength={20}
+              aria-label="優惠代碼"
+              onChange={(event) => setDraft(event.target.value.toUpperCase())}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  onCoupon(draft);
+                }
+              }}
+            />
+            <button type="button" onClick={() => onCoupon(draft)}>使用</button>
+          </span>
+        </label>
+      )}
+      {couponMessage && (
+        <div className="sum-row">
+          <small>{couponMessage}</small>
+        </div>
+      )}
+      <div className="sum-row total" data-applied={applied.map((item) => item.id).join(",")} data-discount={discount}>
         <span>合計</span>
         <span>{formatPrice(total)}</span>
       </div>
@@ -99,7 +215,7 @@ export function SummaryRows({ data, pickup = false, cvs = false }: { data: CartD
 }
 
 export function CartView() {
-  const { data, dropped, setData } = useCart();
+  const { data, dropped, setData, coupon, setCoupon } = useCart();
 
   function update(entry: CartEntry, delta: number, stock: number) {
     const next = changeQty(entry.p, entry.v, delta, stock);
@@ -177,7 +293,7 @@ export function CartView() {
         </div>
         <aside className="summary">
           <h2>訂單摘要</h2>
-          <SummaryRows data={data} />
+          <SummaryRows data={data} coupon={coupon} onCoupon={setCoupon} />
           {blocked ? (
             <button type="button" className="btn solid" disabled>請先調整庫存問題</button>
           ) : (

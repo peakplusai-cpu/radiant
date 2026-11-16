@@ -2,8 +2,9 @@ import { randomBytes } from "crypto";
 import { getStore, mutate } from "./store";
 import { uid } from "./id";
 import { variantPrice } from "./products";
-import { shippingFor } from "./pricing";
 import { formatPrice } from "./format";
+import { effectiveCategories } from "./categories";
+import { customerUses, quoteCart, reinstatePromoUses, restorePromoUses, validGuestToken, type CustomerKeys } from "./promos";
 import { pushLine } from "./line";
 import { enabledPickupPoints, formatPickupAddress } from "./pickup";
 import { canTransition } from "./order-flow";
@@ -27,6 +28,9 @@ export type CheckoutInput = {
   note: string;
   idempotencyKey: string;
   identity: CheckoutIdentity;
+  coupon?: string;
+  guestToken?: string;
+  shownPromoIds?: string[];
 };
 
 class OrderError extends Error {}
@@ -116,6 +120,7 @@ export function expireHolds(store: Store, now = Date.now()): number {
   for (const order of store.orders) {
     if (!holdExpired(order, now)) continue;
     restock(store, order);
+    restorePromoUses(store.promotions, store.promoUses, order.id);
     order.status = "cancelled";
     order.updatedAt = new Date(now).toISOString();
     appendNote(order, "逾時未完成付款或選擇門市，系統自動取消並歸還庫存");
@@ -126,6 +131,33 @@ export function expireHolds(store: Store, now = Date.now()): number {
 
 export async function expireUnpaidOrders(): Promise<number> {
   return mutate((store) => expireHolds(store));
+}
+
+function commitPromoUses(store: Store, orderId: string, applied: { id: string; name: string; discount: number }[], who: CustomerKeys): void {
+  const now = new Date().toISOString();
+  for (const item of applied) {
+    const promo = store.promotions.find((entry) => entry.id === item.id);
+    if (!promo) throw new OrderError(`優惠「${item.name}」已結束，請確認金額後再送出`);
+    const used = store.promoUses.filter((entry) => entry.promoId === promo.id && !entry.restored).length;
+    if (promo.usageLimit > 0 && Math.max(used, promo.used) >= promo.usageLimit) {
+      throw new OrderError(`優惠「${promo.name}」已額滿，請確認金額後再送出`);
+    }
+    if (promo.perCustomer > 0 && customerUses(store.promoUses, promo.id, who) >= promo.perCustomer) {
+      throw new OrderError(`優惠「${promo.name}」已達使用上限，請確認金額後再送出`);
+    }
+    promo.used = Math.max(used, promo.used) + 1;
+    store.promoUses.push({
+      id: uid("use"),
+      promoId: promo.id,
+      orderId,
+      phone: who.phone,
+      email: who.email,
+      lineUserId: who.lineUserId,
+      discount: item.discount,
+      restored: false,
+      createdAt: now,
+    });
+  }
 }
 
 function rememberKey(store: Store, key: string, code: string): void {
@@ -158,7 +190,7 @@ export async function placeOrder(
       }
       if (!merged.size) throw new OrderError("購物袋是空的");
 
-      const items: OrderItem[] = [];
+      const prepared: { product: Store["products"][number]; variant: Store["products"][number]["variants"][number]; qty: number; price: number }[] = [];
       for (const line of merged.values()) {
         const product = store.products.find((item) => item.id === line.productId);
         if (!product || product.status !== "listed") throw new OrderError("部分商品已下架或庫存已更新，請回購物袋確認");
@@ -168,22 +200,51 @@ export async function placeOrder(
           const label = variantLabel(variant.color, variant.size);
           throw new OrderError(`${product.name}（${label}）庫存不足，目前剩 ${Math.max(0, variant.stock)} 件`);
         }
-        variant.stock -= line.qty;
-        product.sold += line.qty;
+        prepared.push({ product, variant, qty: line.qty, price: variantPrice(product, variant) });
+      }
+
+      const who: CustomerKeys = {
+        phone: input.phone,
+        email: input.email.trim().toLowerCase(),
+        lineUserId: input.identity.verified ? input.identity.lineUserId : "",
+      };
+      const quote = quoteCart(store.promotions, store.promoUses, store.promoClaims, {
+        now: Date.now(),
+        lines: prepared.map((row) => ({
+          productId: row.product.id,
+          qty: row.qty,
+          unitPrice: row.price,
+          categories: effectiveCategories(row.product),
+        })),
+        fulfillment: input.fulfillment,
+        settings: store.settings,
+        coupon: input.coupon ?? "",
+        guestToken: input.guestToken && validGuestToken(input.guestToken) ? input.guestToken : "",
+        lineUserId: who.lineUserId,
+        phone: who.phone,
+        email: who.email,
+        expectIds: (input.shownPromoIds ?? []).filter((id) => typeof id === "string").slice(0, 10),
+      });
+      if (quote.error) throw new OrderError(quote.error);
+
+      const items: OrderItem[] = [];
+      for (const row of prepared) {
+        row.variant.stock -= row.qty;
+        row.product.sold += row.qty;
         items.push({
-          productId: product.id,
-          variantId: variant.id,
-          name: product.name,
-          color: variant.color,
-          size: variant.size,
-          hex: variant.hex,
-          price: variantPrice(product, variant),
-          qty: line.qty,
-          photo: product.photos[0] ?? "",
+          productId: row.product.id,
+          variantId: row.variant.id,
+          name: row.product.name,
+          color: row.variant.color,
+          size: row.variant.size,
+          hex: row.variant.hex,
+          price: row.price,
+          qty: row.qty,
+          photo: row.product.photos[0] ?? "",
         });
       }
 
-      const subtotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+      const subtotal = quote.subtotal;
       const pickup = input.fulfillment === "pickup";
       const cvs = input.fulfillment === "cvs";
       let address = cvs ? "" : input.address;
@@ -196,14 +257,18 @@ export async function placeOrder(
         pickupPointName = point.name;
         address = formatPickupAddress(point);
       }
-      const shipping = shippingFor(subtotal, store.settings, input.fulfillment);
-      if (cvs && (subtotal + shipping < CVS_MIN_TOTAL || subtotal + shipping > CVS_MAX_TOTAL)) {
+      const shipping = quote.shipping;
+      const discount = quote.discount;
+      const total = quote.total;
+      if (cvs && (total < CVS_MIN_TOTAL || total > CVS_MAX_TOTAL)) {
         throw new OrderError(`超商取貨的訂單金額須在 NT$ ${CVS_MIN_TOTAL} 至 NT$ ${CVS_MAX_TOTAL.toLocaleString("en-US")} 之間，請改用宅配或分開下單`);
       }
       const customer = upsertCustomer(store, input.identity, input.email);
       const now = new Date().toISOString();
+      const orderId = uid("ord");
+      commitPromoUses(store, orderId, quote.applied, who);
       const order: Order = {
-        id: uid("ord"),
+        id: orderId,
         code: newCode(store),
         token: randomBytes(32).toString("base64url"),
         customerId: customer.id,
@@ -227,8 +292,10 @@ export async function placeOrder(
         note: input.note,
         items,
         subtotal,
+        discount,
+        appliedPromos: quote.applied.map(({ endsAt: _endsAt, ...promo }) => promo),
         shipping,
-        total: subtotal + shipping,
+        total,
         status: "pending",
         internalNote: "",
         createdAt: now,
@@ -280,6 +347,7 @@ export async function changeOrder(
     let stockRestored = false;
     if (status === "cancelled" && order.status !== "cancelled") {
       restock(store, order);
+      restorePromoUses(store.promotions, store.promoUses, order.id);
       order.holdUntil = "";
       stockRestored = true;
     }
@@ -388,6 +456,7 @@ export async function applyPaymentNotice(notice: PaymentNotice): Promise<Payment
       if (expiredByHold && reserveAgain(store, order)) {
         order.status = "pending";
         revived = true;
+        reinstatePromoUses(store.promotions, store.promoUses, order.id);
         appendNote(order, "逾時取消後收到款項或門市資料，已重新保留庫存");
       } else {
         order.payTradeNo = notice.tradeNo;

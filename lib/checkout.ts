@@ -24,6 +24,9 @@ const bodySchema = z
     payment: z.enum(["line", "online", "cod"]).optional().default("line"),
     pickupPointId: z.string().trim().max(80).optional().default(""),
     idempotencyKey: z.string().trim().regex(/^[A-Za-z0-9_-]{8,80}$/),
+    coupon: z.string().trim().max(40).optional().default(""),
+    guestToken: z.string().trim().max(80).optional().default(""),
+    shownPromoIds: z.array(z.string().trim().min(1).max(80)).max(10).optional().default([]),
   })
   .strict();
 
@@ -38,6 +41,9 @@ export type CheckoutBody = {
   payment: PaymentMethod;
   pickupPointId: string;
   idempotencyKey: string;
+  coupon: string;
+  guestToken: string;
+  shownPromoIds: string[];
 };
 
 export type CheckoutIdentity = {

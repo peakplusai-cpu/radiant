@@ -6,12 +6,13 @@ import { useState } from "react";
 import { formatPrice } from "@/lib/format";
 import { clearCart } from "@/lib/cart-client";
 import { cleanEmail, cleanPersonName, normalizeTaiwanMobile } from "@/lib/phone";
+import { readGuestToken } from "@/lib/promo-client";
 import { startPayment } from "@/lib/pay-client";
 import { CVS_MAX_TOTAL, CVS_MIN_TOTAL, onlineEnabled, onlineTitle, type PaymentOptions } from "@/lib/payment";
 import type { Fulfillment, PaymentMethod, PickupPoint } from "@/lib/types";
 import { variantLabel } from "@/lib/variants";
 import { ProductImage } from "./ProductImage";
-import { SummaryRows, totals, useCart } from "./CartView";
+import { SummaryRows, useCart } from "./CartView";
 
 function idempotencyKey(): string {
   const existing = sessionStorage.getItem("radiant.checkout-key");
@@ -53,13 +54,16 @@ export function CheckoutForm({
   options: PaymentOptions;
 }) {
   const router = useRouter();
-  const { data, reload } = useCart();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [method, setMethod] = useState<Fulfillment>("delivery");
   const [pickupId, setPickupId] = useState(pickupPoints[0]?.id ?? "");
   const [payment, setPayment] = useState<PaymentMethod>(onlineEnabled(options) ? "online" : "line");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const fulfillment: Fulfillment = method === "pickup" && pickupPoints.length > 0 ? "pickup" : method === "cvs" && options.cvs ? "cvs" : "delivery";
+  const { data, reload, coupon, setCoupon } = useCart(fulfillment, { phone, email });
   const pickupOn = pickupPoints.length > 0 && method === "pickup";
   const cvsOn = options.cvs && method === "cvs";
   const choices = paymentChoices(method, options);
@@ -109,6 +113,9 @@ export function CheckoutForm({
           payment: chosen.value,
           pickupPointId: pickupOn ? pickupId : "",
           idempotencyKey: idempotencyKey(),
+          coupon,
+          guestToken: readGuestToken(),
+          shownPromoIds: data.quote?.applied.map((item) => item.id) ?? [],
         }),
       });
       const json = (await res.json()) as { code?: string; token?: string; pay?: boolean; error?: string };
@@ -143,7 +150,7 @@ export function CheckoutForm({
     );
   }
   const blocked = data.lines.some((line) => line.stock < 1 || line.qty > line.stock);
-  const sum = totals(data, { pickup: pickupOn, cvs: cvsOn }).total;
+  const sum = data.quote?.total ?? 0;
   const cvsOutOfRange = cvsOn && (sum < CVS_MIN_TOTAL || sum > CVS_MAX_TOTAL);
   const selected = pickupPoints.find((point) => point.id === pickupId);
 
@@ -185,13 +192,13 @@ export function CheckoutForm({
           </label>
           <label className="field">
             <span className="label">聯絡電話</span>
-            <input className="input" name="phone" required maxLength={20} inputMode="tel" autoComplete="tel" placeholder="0912345678" aria-invalid={Boolean(fieldErrors.phone)} disabled={busy} />
+            <input className="input" name="phone" required maxLength={20} inputMode="tel" autoComplete="tel" placeholder="0912345678" aria-invalid={Boolean(fieldErrors.phone)} disabled={busy} value={phone} onChange={(event) => setPhone(event.target.value)} />
             {fieldErrors.phone && <span className="field-error">{fieldErrors.phone}</span>}
           </label>
         </div>
         <label className="field">
           <span className="label">電子郵件</span>
-          <input className="input" name="email" type="email" required maxLength={50} autoComplete="email" inputMode="email" placeholder="name@example.com" aria-invalid={Boolean(fieldErrors.email)} disabled={busy} />
+          <input className="input" name="email" type="email" required maxLength={50} autoComplete="email" inputMode="email" placeholder="name@example.com" aria-invalid={Boolean(fieldErrors.email)} disabled={busy} value={email} onChange={(event) => setEmail(event.target.value)} />
           {fieldErrors.email && <span className="field-error">{fieldErrors.email}</span>}
         </label>
         {pickupOn ? (
@@ -272,7 +279,7 @@ export function CheckoutForm({
             </div>
           ))}
         </div>
-        <SummaryRows data={data} pickup={pickupOn} cvs={cvsOn} />
+        <SummaryRows data={data} pickup={pickupOn} cvs={cvsOn} coupon={coupon} onCoupon={setCoupon} />
         {error && <div className="notice error" style={{ marginTop: 20 }} role="alert">{error}</div>}
         <button type="submit" className="btn solid" disabled={busy || blocked || cvsOutOfRange}>
           {busy

@@ -24,6 +24,12 @@ export async function POST(request: Request) {
   if (!optionsAllow(paymentOptions(), parsed.data.fulfillment, parsed.data.payment)) {
     return NextResponse.json({ error: "目前無法使用這個付款方式，請重新整理後再試" }, { status: 400 });
   }
+  if (parsed.data.coupon) {
+    const couponLimit = rateLimit(`coupon:${clientIp(request.headers)}`, 10, 10 * 60 * 1000);
+    if (!couponLimit.ok) {
+      return NextResponse.json({ error: "優惠代碼嘗試太頻繁，請稍後再試" }, { status: 429, headers: { "Retry-After": String(couponLimit.retryAfter) } });
+    }
+  }
 
   const session = await getLineIdentity();
   const identity = resolveCheckoutIdentity({
@@ -45,6 +51,9 @@ export async function POST(request: Request) {
       note: parsed.data.note,
       idempotencyKey: parsed.data.idempotencyKey,
       identity: identity.identity,
+      coupon: parsed.data.coupon,
+      guestToken: parsed.data.guestToken,
+      shownPromoIds: parsed.data.shownPromoIds,
     });
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: 409 });
     await grantReceipt(result.order.code);

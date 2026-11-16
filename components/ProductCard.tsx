@@ -1,15 +1,19 @@
 import Link from "next/link";
 import type { Product } from "@/lib/types";
+import type { DisplayDeal } from "@/lib/promos";
 import { formatPrice } from "@/lib/format";
 import { isSoldOut, priceRange } from "@/lib/products";
 import { groupVariants } from "@/lib/variants";
 import { ProductImage } from "./ProductImage";
 
-export function ProductCard({ product, index }: { product: Product; index: number }) {
+export function ProductCard({ product, index, deal }: { product: Product; index: number; deal?: DisplayDeal | null }) {
   const { min, max } = priceRange(product);
   const soldOut = isSoldOut(product);
   const colors = groupVariants(product.variants);
-  const onSale = product.comparePrice > min;
+  const discounted = Boolean(deal && deal.min < min);
+  const showMin = discounted && deal ? deal.min : min;
+  const showMax = discounted && deal ? deal.max : max;
+  const strike = discounted && deal ? deal.compare : product.comparePrice > min ? product.comparePrice : 0;
   return (
     <Link href={`/p/${product.id}`} className="card">
       <div className="frame">
@@ -26,6 +30,8 @@ export function ProductCard({ product, index }: { product: Product; index: numbe
         )}
         {soldOut ? (
           <span className="tag out">已售完</span>
+        ) : deal ? (
+          <span className="tag">{deal.badge}</span>
         ) : product.featured ? (
           <span className="tag">精選</span>
         ) : null}
@@ -38,10 +44,10 @@ export function ProductCard({ product, index }: { product: Product; index: numbe
         <h3>{product.name}</h3>
         <div className="card-price">
           <span>
-            {formatPrice(min)}
-            {max > min ? " 起" : ""}
+            {formatPrice(showMin)}
+            {showMax > showMin ? " 起" : ""}
           </span>
-          {onSale && <s>{formatPrice(product.comparePrice)}</s>}
+          {strike > showMin && <s>{formatPrice(strike)}</s>}
         </div>
         {colors.length > 0 && (
           <div className="swatches" aria-label="可選顏色">
