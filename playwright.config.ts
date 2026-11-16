@@ -9,6 +9,11 @@ export default defineConfig({
     url: "http://127.0.0.1:3100",
     reuseExistingServer: false,
     timeout: 120_000,
-    env: { RADIANT_DATA_FILE: "data/e2e-store.json" },
+    env: {
+      RADIANT_DATA_FILE: "data/e2e-store.json",
+      NEWEBPAY_MERCHANT_ID: "MS000TEST",
+      NEWEBPAY_HASH_KEY: "e2eHashKeyThirtyTwoCharsLong0123",
+      NEWEBPAY_HASH_IV: "e2eHashIV0123456",
+    },
   },
 });

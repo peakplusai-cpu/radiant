@@ -1,3 +1,4 @@
+import { createCipheriv, createHash } from "crypto";
 import { expect, test } from "@playwright/test";
 
 test("browse, choose a size, and keep the cart in sync through checkout", async ({ page }) => {
@@ -54,4 +55,67 @@ test("unauthenticated admin responses do not contain store data", async ({ reque
   });
   expect(forged.status()).toBe(307);
   expect(await forged.text()).not.toContain("LEAKPROBE");
+});
+
+const KEY = "e2eHashKeyThirtyTwoCharsLong0123";
+const IV = "e2eHashIV0123456";
+
+function signedForm(body: unknown) {
+  const cipher = createCipheriv("aes-256-cbc", KEY, IV);
+  const tradeInfo = Buffer.concat([cipher.update(JSON.stringify(body), "utf8"), cipher.final()]).toString("hex");
+  const tradeSha = createHash("sha256").update(`HashKey=${KEY}&${tradeInfo}&HashIV=${IV}`).digest("hex").toUpperCase();
+  return { Status: "SUCCESS", MerchantID: "MS000TEST", TradeInfo: tradeInfo, TradeSha: tradeSha, Version: "2.0" };
+}
+
+test("NewebPay notices must be signed, and a signed one marks the order paid", async ({ request, page }) => {
+  const result = { MerchantID: "MS000TEST", Amt: 1150, TradeNo: "E2E0001", MerchantOrderNo: "RDPAYTEST_1", PaymentType: "CREDIT", PayTime: "2026-11-16 22:00:00" };
+
+  const forged = await request.post("/api/pay/notify", { form: { ...signedForm({ Status: "SUCCESS", Result: result }), TradeSha: "0".repeat(64) } });
+  expect(forged.status()).toBe(400);
+
+  await page.goto("/order/RDPAYTEST?t=paytok");
+  await expect(page.getByRole("heading", { name: "請完成付款" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /前往付款/ })).toBeVisible();
+
+  const wrongAmount = await request.post("/api/pay/notify", { form: signedForm({ Status: "SUCCESS", Result: { ...result, Amt: 1 } }) });
+  expect(wrongAmount.status()).toBe(200);
+  await page.reload();
+  await expect(page.getByRole("button", { name: /前往付款/ })).toBeVisible();
+
+  const notify = await request.post("/api/pay/notify", { form: signedForm({ Status: "SUCCESS", Result: result }) });
+  expect(notify.status()).toBe(200);
+  expect(await notify.text()).toBe("OK");
+
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "訂單已送出" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /前往付款/ })).toHaveCount(0);
+  await expect(page.locator(".status-pill")).toHaveText("已付款");
+});
+
+test("returning from NewebPay with a signed form lands on the order page", async ({ request, page }) => {
+  const store = { StoreCode: "131386", StoreName: "光輝", StoreType: "全家", StoreAddr: "台北市信義區", CVSCOMName: "取貨測試", CVSCOMPhone: "0912000002", LgsNo: "F000111" };
+  const form = signedForm({ Status: "SUCCESS", Result: { MerchantID: "MS000TEST", Amt: 1145, TradeNo: "E2E0002", MerchantOrderNo: "RDCODTEST_1", PaymentType: "CVSCOM", ...store } });
+  const response = await request.post("/api/pay/return", { form, maxRedirects: 0 });
+  expect(response.status()).toBe(303);
+  expect(new URL(response.headers().location).pathname).toBe("/order/RDCODTEST");
+  expect(response.headers().location).toContain("pay=ok");
+
+  const bad = await request.post("/api/pay/return", { form: { ...form, TradeSha: "0".repeat(64) }, maxRedirects: 0 });
+  expect(bad.status()).toBe(303);
+  expect(bad.headers().location).not.toContain("RDCODTEST");
+
+  await page.goto("/order/RDCODTEST?t=codtok");
+  await expect(page.getByText("全家 光輝")).toBeVisible();
+  await expect(page.getByText("取貨測試").first()).toBeVisible();
+  await expect(page.getByText("寄件代碼")).toHaveCount(0);
+  await expect(page.locator(".status-pill")).toHaveText("待出貨（取貨付款）");
+});
+
+test("pay start refuses cross-site requests and unknown orders", async ({ request, baseURL }) => {
+  const noOrigin = await request.post("/api/pay/start", { data: { code: "RDPAYTEST", token: "paytok" } });
+  expect(noOrigin.status()).toBe(403);
+  const unknown = await request.post("/api/pay/start", { headers: { origin: baseURL ?? "" }, data: { code: "RDNOPE", token: "x" } });
+  expect(unknown.status()).toBe(404);
+  const wrongToken = await request.post("/api/pay/start", { headers: { origin: baseURL ?? "" }, data: { code: "RDCODTEST", token: "wrong" } });
+  expect(wrongToken.status()).toBe(404);
 });
