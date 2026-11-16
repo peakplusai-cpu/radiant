@@ -34,9 +34,12 @@ export function fulfillmentLabel(kind: Fulfillment | undefined): string {
   return kind === "pickup" ? "自取" : "宅配";
 }
 
-/** Status text that accounts for online payment and pay-at-pickup orders. */
-export function orderStatusLabel(order: Pick<Order, "status" | "paymentMethod" | "holdUntil">): string {
-  if (awaitingCustomer(order)) return order.paymentMethod === "cod" ? "待選門市" : "待付款";
+/** Status text that accounts for online payment, ATM/CVS numbers, and pay-at-pickup orders. */
+export function orderStatusLabel(order: Pick<Order, "status" | "paymentMethod" | "holdUntil"> & { payCodeNo?: string }): string {
+  if (awaitingCustomer(order)) {
+    if (order.payCodeNo) return "待繳費";
+    return order.paymentMethod === "cod" ? "待選門市" : "待付款";
+  }
   if (order.status === "pending" && order.paymentMethod === "cod") return "待出貨（取貨付款）";
   return ORDER_STATUS_LABEL[order.status];
 }

@@ -1,5 +1,5 @@
 import { formatDate, formatPrice, fulfillmentLabel, orderStatusLabel } from "@/lib/format";
-import { paymentLabel } from "@/lib/payment";
+import { paymentLabel, payTypeLabel } from "@/lib/payment";
 import { variantLabel } from "@/lib/variants";
 import type { Order } from "@/lib/types";
 import { ProductImage } from "./ProductImage";
@@ -55,12 +55,35 @@ export function OrderReceipt({ order, showAddress = true, staff = false }: { ord
           <dt>付款方式</dt>
           <dd>
             {paymentLabel(order.paymentMethod, order.fulfillment)}
+            {order.payType ? ` · ${payTypeLabel(order.payType)}` : ""}
             {order.paidAt && order.paymentMethod === "online" ? `（${formatDate(order.paidAt)} 已付款）` : ""}
           </dd>
+          {order.payTradeNo && (
+            <>
+              <dt>藍新交易序號</dt>
+              <dd className="mono">{order.payTradeNo}</dd>
+            </>
+          )}
+          {order.status === "pending" && order.payCodeNo && (
+            <>
+              <dt>{order.payType === "VACC" ? "ATM 繳費" : "超商繳費代碼"}</dt>
+              <dd>
+                {order.payBankCode && <div>銀行代碼 {order.payBankCode}</div>}
+                <div className="mono">{order.payCodeNo}</div>
+                {order.payExpire && <div>請於 {order.payExpire} 23:59 前繳費</div>}
+              </dd>
+            </>
+          )}
           <dt>姓名</dt>
           <dd>{order.recipient}</dd>
           <dt>電話</dt>
           <dd>{order.phone}</dd>
+          {order.email && (
+            <>
+              <dt>Email</dt>
+              <dd>{order.email}</dd>
+            </>
+          )}
           {order.fulfillment === "cvs" ? (
             <>
               <dt>取貨門市</dt>
@@ -83,23 +106,11 @@ export function OrderReceipt({ order, showAddress = true, staff = false }: { ord
                   <dd className="mono">{order.cvs.lgsNo}</dd>
                 </>
               )}
-              {staff && order.payTradeNo && (
-                <>
-                  <dt>藍新序號</dt>
-                  <dd className="mono">{order.payTradeNo}</dd>
-                </>
-              )}
             </>
           ) : (
             <>
               <dt>{order.fulfillment === "pickup" ? "自取地點" : "地址"}</dt>
               <dd>{order.address || order.pickupPointName}</dd>
-              {staff && order.payTradeNo && (
-                <>
-                  <dt>藍新序號</dt>
-                  <dd className="mono">{order.payTradeNo}</dd>
-                </>
-              )}
             </>
           )}
           {order.note && (

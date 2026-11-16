@@ -1,3 +1,18 @@
+/** Taiwan mobile only (09xxxxxxxx). Checkout does not accept landlines. */
+export function normalizeTaiwanMobile(input: string): string | null {
+  const phone = normalizeTaiwanPhone(input);
+  if (!phone || !/^09\d{8}$/.test(phone)) return null;
+  return phone;
+}
+
+/** Receipt address. NewebPay accepts at most 50 characters. */
+export function cleanEmail(input: string): string | null {
+  const email = input.trim().toLowerCase();
+  if (email.length < 6 || email.length > 50) return null;
+  if (!/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(email)) return null;
+  return email;
+}
+
 /** Canonical Taiwan mobile (09xxxxxxxx) or area-code landline. */
 export function normalizeTaiwanPhone(input: string): string | null {
   let digits = input.trim().replace(/[\s().-]/g, "");

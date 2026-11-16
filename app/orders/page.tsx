@@ -1,6 +1,7 @@
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { OrderReceipt } from "@/components/OrderReceipt";
+import { OrderLookup } from "@/components/OrderLookup";
 import { getStore } from "@/lib/store";
 import { getLineIdentity, lineLoginEnabled } from "@/lib/line";
 import { formatPrice } from "@/lib/format";
@@ -25,17 +26,18 @@ export default async function OrdersPage() {
           <span className="eyebrow">訂單</span>
           <h1>我的訂單</h1>
         </div>
+        <OrderLookup />
         {!identity ? (
           <section className="gate">
             <span className="eyebrow">LINE</span>
-            <h2>以 LINE 查看訂單</h2>
-            <p>登入後即可看到您以 LINE 帳號下過的所有訂單。</p>
+            <h2>以 LINE 查看訂單（選用）</h2>
+            <p>登入後可以看到您以這個 LINE 帳號下過的訂單。訪客訂單請用上方的訂單編號查詢。</p>
             {lineLoginEnabled(settings) ? (
               <a href="/api/line/login?next=/orders" className="btn line-green">
                 使用 LINE 登入
               </a>
             ) : (
-              <p style={{ margin: 0 }}>目前尚未開放 LINE 登入查詢，請透過官方 LINE 與我們聯繫。</p>
+              <p style={{ margin: 0 }}>目前尚未開放 LINE 登入。請用訂單編號、手機與 Email 查詢。</p>
             )}
           </section>
         ) : mine.length === 0 ? (

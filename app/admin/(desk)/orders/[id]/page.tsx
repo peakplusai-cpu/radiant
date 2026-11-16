@@ -43,15 +43,21 @@ export default async function OrderAdmin({
         <OrderReceipt order={order} staff />
         <div>
           <section className="panel">
-            <h2>LINE 客戶</h2>
+            <h2>客戶</h2>
             {customer ? (
               <dl className="kv" style={{ marginBottom: 24 }}>
                 <dt>LINE 名稱</dt>
                 <dd>{customer.lineName || "—"}</dd>
                 <dt>LINE ID</dt>
                 <dd>{customer.lineId || "—"}</dd>
-                <dt>驗證</dt>
-                <dd>{customer.verified ? "已透過 LINE 登入" : "客戶自行填寫（未驗證）"}</dd>
+                <dt>身分</dt>
+                <dd>{customer.verified ? "已透過 LINE 登入" : "訪客結帳"}</dd>
+                {customer.email && (
+                  <>
+                    <dt>Email</dt>
+                    <dd>{customer.email}</dd>
+                  </>
+                )}
                 {customer.lineUserId && (
                   <>
                     <dt>User ID</dt>

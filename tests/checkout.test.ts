@@ -11,6 +11,7 @@ const input = (patch: Partial<CheckoutInput> = {}): CheckoutInput => ({
   lines: [{ productId: "prd_1", variantId: "var_m", qty: 1 }],
   recipient: "王小明",
   phone: "0912345678",
+  email: "guest@example.com",
   address: "台北市中山區南京東路一段1號",
   fulfillment: "delivery",
   pickupPointId: "",

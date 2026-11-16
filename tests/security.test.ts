@@ -34,6 +34,7 @@ describe("checkout validation", () => {
     items: [{ productId: "prd_1", variantId: "var_1", qty: 1 }],
     recipient: "王小明",
     phone: "0912-345-678",
+    email: "guest@example.com",
     address: "台北市中山區南京東路一段1號",
     note: "",
     fulfillment: "delivery",
@@ -52,18 +53,16 @@ describe("checkout validation", () => {
     if (ok.ok) expect(ok.data.phone).toBe("0912345678");
   });
 
-  it("requires a verified LINE session when login is enabled", () => {
-    expect(resolveCheckoutIdentity({ loginRequired: true, session: null, recipient: "王小明", phone: "0912345678" }).ok).toBe(false);
-    const guest = resolveCheckoutIdentity({ loginRequired: false, session: null, recipient: "王小明", phone: "0912345678" });
-    expect(guest.ok && guest.identity.verified).toBe(false);
-    expect(guest.ok && guest.identity.lineUserId).toBe("");
+  it("checks out as a guest even when LINE login exists, and attaches a session when one is present", () => {
+    const guest = resolveCheckoutIdentity({ session: null, recipient: "王小明", phone: "0912345678" });
+    expect(guest.identity.verified).toBe(false);
+    expect(guest.identity.lineUserId).toBe("");
     const signedIn = resolveCheckoutIdentity({
-      loginRequired: true,
       session: { userId: "Ureal", name: "小明" },
       recipient: "王小明",
       phone: "0912345678",
     });
-    expect(signedIn.ok && signedIn.identity).toMatchObject({ lineUserId: "Ureal", verified: true, lineId: "" });
+    expect(signedIn.identity).toMatchObject({ lineUserId: "Ureal", verified: true, lineId: "" });
   });
 });
 

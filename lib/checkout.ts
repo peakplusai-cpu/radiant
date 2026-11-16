@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { cleanNote, cleanPersonName, normalizeTaiwanPhone } from "./phone";
+import { cleanEmail, cleanNote, cleanPersonName, normalizeTaiwanMobile } from "./phone";
 import { paymentAllowed } from "./payment";
 import type { Fulfillment, PaymentMethod } from "./types";
 
@@ -17,6 +17,7 @@ const bodySchema = z
       .max(50),
     recipient: z.string().trim().min(1).max(40),
     phone: z.string().trim().min(1).max(30),
+    email: z.string().trim().max(80).optional().default(""),
     address: z.string().trim().max(200).optional().default(""),
     note: z.string().max(300).optional().default(""),
     fulfillment: z.enum(["delivery", "pickup", "cvs"]).optional().default("delivery"),
@@ -30,6 +31,7 @@ export type CheckoutBody = {
   items: { productId: string; variantId: string; qty: number }[];
   recipient: string;
   phone: string;
+  email: string;
   address: string;
   note: string;
   fulfillment: Fulfillment;
@@ -51,8 +53,10 @@ export function parseCheckoutBody(input: unknown): { ok: true; data: CheckoutBod
   if (!parsed.success) return { ok: false, error: "請檢查姓名、電話、地址與商品是否填寫正確" };
   const recipient = cleanPersonName(parsed.data.recipient);
   if (!recipient) return { ok: false, error: "請填寫收件人姓名" };
-  const phone = normalizeTaiwanPhone(parsed.data.phone);
-  if (!phone) return { ok: false, error: "請填寫有效的台灣電話，例如 0912345678" };
+  const phone = normalizeTaiwanMobile(parsed.data.phone);
+  if (!phone) return { ok: false, error: "請填寫有效的台灣手機，例如 0912345678" };
+  const email = cleanEmail(parsed.data.email);
+  if (!email) return { ok: false, error: "請填寫有效的 Email，以便寄送收據" };
   const fulfillment = parsed.data.fulfillment;
   const address = cleanNote(parsed.data.address, 200);
   if (fulfillment === "delivery" && address.length < 6) return { ok: false, error: "請填寫完整收件地址" };
@@ -64,6 +68,7 @@ export function parseCheckoutBody(input: unknown): { ok: true; data: CheckoutBod
       ...parsed.data,
       recipient,
       phone,
+      email,
       address: fulfillment === "delivery" ? address : "",
       pickupPointId: fulfillment === "pickup" ? parsed.data.pickupPointId : "",
       note: cleanNote(parsed.data.note, 300),
@@ -73,19 +78,15 @@ export function parseCheckoutBody(input: unknown): { ok: true; data: CheckoutBod
 }
 
 /**
- * Identity comes only from the verified LINE session.
- * Client-supplied lineName / lineId / lineUserId are ignored.
- * When LINE Login is not configured, checkout is a guest order keyed by phone.
+ * LINE is optional. A signed-in session is attached when the browser already
+ * has one; otherwise the order is a guest keyed by phone. Client-supplied
+ * line ids are never read.
  */
 export function resolveCheckoutIdentity(input: {
-  loginRequired: boolean;
   session: { userId: string; name: string } | null;
   recipient: string;
   phone: string;
-}): { ok: true; identity: CheckoutIdentity } | { ok: false; error: string; status: number } {
-  if (input.loginRequired && !input.session) {
-    return { ok: false, error: "請先使用 LINE 登入", status: 401 };
-  }
+}): { ok: true; identity: CheckoutIdentity } {
   if (input.session?.userId) {
     const name = cleanPersonName(input.session.name) ?? input.recipient;
     return {

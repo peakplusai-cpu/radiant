@@ -9,7 +9,7 @@ import { enabledPickupPoints, formatPickupAddress } from "./pickup";
 import { canTransition } from "./order-flow";
 import { variantLabel } from "./variants";
 import { CVS_MAX_TOTAL, CVS_MIN_TOTAL, HOLD_MINUTES, MAX_HOLD_MINUTES, awaitingCustomer, holdExpired, paymentAllowed, paymentLabel } from "./payment";
-import type { PaymentNotice } from "./newebpay";
+import { isVoucherNotice, noticePayType, voucherDeadline, type PaymentNotice } from "./newebpay";
 import type { CheckoutIdentity } from "./checkout";
 import type { Customer, Fulfillment, Order, OrderItem, OrderStatus, PaymentMethod, Store } from "./types";
 
@@ -19,6 +19,7 @@ export type CheckoutInput = {
   lines: CartLine[];
   recipient: string;
   phone: string;
+  email: string;
   address: string;
   fulfillment: Fulfillment;
   payment?: PaymentMethod;
@@ -30,7 +31,7 @@ export type CheckoutInput = {
 
 class OrderError extends Error {}
 
-function upsertCustomer(store: Store, id: CheckoutIdentity): Customer {
+function upsertCustomer(store: Store, id: CheckoutIdentity, email: string): Customer {
   const now = new Date().toISOString();
   let customer: Customer | undefined;
   if (id.verified && id.lineUserId) {
@@ -46,6 +47,7 @@ function upsertCustomer(store: Store, id: CheckoutIdentity): Customer {
       lineName: id.lineName,
       lineId: "",
       phone: id.phone,
+      email,
       verified: id.verified,
       note: "",
       createdAt: now,
@@ -61,6 +63,7 @@ function upsertCustomer(store: Store, id: CheckoutIdentity): Customer {
   }
   if (id.lineName) customer.lineName = id.lineName;
   if (id.phone) customer.phone = id.phone;
+  if (email) customer.email = email;
   customer.lastOrderAt = now;
   return customer;
 }
@@ -197,7 +200,7 @@ export async function placeOrder(
       if (cvs && (subtotal + shipping < CVS_MIN_TOTAL || subtotal + shipping > CVS_MAX_TOTAL)) {
         throw new OrderError(`超商取貨的訂單金額須在 NT$ ${CVS_MIN_TOTAL} 至 NT$ ${CVS_MAX_TOTAL.toLocaleString("en-US")} 之間，請改用宅配或分開下單`);
       }
-      const customer = upsertCustomer(store, input.identity);
+      const customer = upsertCustomer(store, input.identity, input.email);
       const now = new Date().toISOString();
       const order: Order = {
         id: uid("ord"),
@@ -206,6 +209,7 @@ export async function placeOrder(
         customerId: customer.id,
         recipient: input.recipient,
         phone: input.phone,
+        email: input.email,
         address,
         fulfillment: input.fulfillment,
         pickupPointId,
@@ -214,6 +218,9 @@ export async function placeOrder(
         paidAt: "",
         payTradeNo: "",
         payType: "",
+        payBankCode: "",
+        payCodeNo: "",
+        payExpire: "",
         payAttempts: 0,
         holdUntil: payment === "line" ? "" : new Date(Date.now() + HOLD_MINUTES * 60_000).toISOString(),
         cvs: null,
@@ -300,6 +307,9 @@ export async function beginPayment(code: string): Promise<BeginPayment> {
     if (!order) return { ok: false, error: "找不到訂單", status: 404 };
     if (order.paymentMethod === "line") return { ok: false, error: "這張訂單不需要線上付款", status: 400 };
     if (order.status === "cancelled") return { ok: false, error: "訂單已取消（逾時未付款），請重新下單", status: 409 };
+    if (order.payCodeNo && order.status === "pending" && !order.paidAt) {
+      return { ok: false, error: "已取得繳費代碼，請依訂單頁面的帳號或代碼完成繳費", status: 409 };
+    }
     if (!awaitingCustomer(order)) return { ok: false, error: "這張訂單已完成付款或選擇門市", status: 409 };
     const now = Date.now();
     const cap = Date.parse(order.createdAt) + MAX_HOLD_MINUTES * 60_000;
@@ -316,6 +326,7 @@ export type PaymentOutcome =
   | { kind: "failed"; order: Order }
   | { kind: "duplicate"; order: Order }
   | { kind: "mismatch"; order: Order }
+  | { kind: "voucher"; order: Order; customer?: Customer }
   | { kind: "confirmed"; order: Order; customer?: Customer; revived: boolean }
   | { kind: "completed"; order: Order; customer?: Customer }
   | { kind: "refund"; order: Order; customer?: Customer };
@@ -326,8 +337,8 @@ function isConfirmed(order: Order): boolean {
 }
 
 /**
- * Applies a verified NewebPay notice. Notify and Return both land here, so every
- * branch must be safe to run twice.
+ * Applies a verified NewebPay notify. The browser return URL does not call this.
+ * Every branch is safe to run twice.
  */
 export async function applyPaymentNotice(notice: PaymentNotice): Promise<PaymentOutcome> {
   const outcome = await mutate((store): PaymentOutcome => {
@@ -343,6 +354,24 @@ export async function applyPaymentNotice(notice: PaymentNotice): Promise<Payment
       appendNote(order, `藍新回報金額 ${notice.amt} 與訂單金額 ${order.total} 不符，未自動入帳（交易序號 ${notice.tradeNo}）`);
       order.updatedAt = now;
       return { kind: "mismatch", order };
+    }
+
+    if (isVoucherNotice(notice)) {
+      if (order.paymentMethod !== "online") return { kind: "ignored" };
+      if (order.paidAt || (order.payCodeNo && order.payTradeNo === notice.tradeNo)) return { kind: "duplicate", order };
+      if (order.status === "cancelled") {
+        appendNote(order, `訂單已取消後才取得繳費代碼（藍新序號 ${notice.tradeNo}），未保留庫存`);
+        order.updatedAt = now;
+        return { kind: "ignored" };
+      }
+      order.payBankCode = notice.bankCode;
+      order.payCodeNo = notice.codeNo;
+      order.payExpire = notice.expireDate;
+      order.payTradeNo = notice.tradeNo;
+      order.payType = noticePayType(notice);
+      order.holdUntil = voucherDeadline(notice.expireDate, Date.parse(now));
+      order.updatedAt = now;
+      return { kind: "voucher", order, customer };
     }
 
     const wasConfirmed = isConfirmed(order);
@@ -382,7 +411,7 @@ export async function applyPaymentNotice(notice: PaymentNotice): Promise<Payment
       order.paidAt = now;
     }
     order.payTradeNo = notice.tradeNo;
-    order.payType = notice.paymentType;
+    order.payType = noticePayType(notice);
     order.holdUntil = "";
     order.updatedAt = now;
     return pickedUp
@@ -400,6 +429,13 @@ function stripEmpty<T extends object>(value: T): Partial<T> {
 
 async function notifyPayment(outcome: PaymentOutcome): Promise<void> {
   if (outcome.kind === "ignored" || outcome.kind === "failed" || outcome.kind === "duplicate") return;
+  if (outcome.kind === "voucher") {
+    const { settings } = await getStore();
+    const order = outcome.order;
+    const how = order.payType === "VACC" ? "ATM 轉帳" : "超商代碼";
+    void pushLine(settings.notifyTo, `訂單 ${order.code} 已取得${how}繳費代碼，繳費期限 ${order.payExpire || "見後台"}\n${order.recipient}\n合計 ${formatPrice(order.total)}`);
+    return;
+  }
   const { settings } = await getStore();
   const order = outcome.order;
   const lines = order.items.map((item) => `· ${item.name} ${variantLabel(item.color, item.size)} × ${item.qty}`).join("\n");

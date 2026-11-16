@@ -1,7 +1,6 @@
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { CheckoutForm } from "@/components/CheckoutForm";
-import { CartPreserveNote } from "@/components/CartPreserveNote";
 import { getStore } from "@/lib/store";
 import { getLineIdentity, lineLoginEnabled } from "@/lib/line";
 import { enabledPickupPoints } from "@/lib/pickup";
@@ -23,7 +22,6 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
   const identity = await getLineIdentity();
   const loginOn = lineLoginEnabled(settings);
   const options = paymentOptions();
-  const online = options.card || options.cvs;
 
   return (
     <>
@@ -38,30 +36,19 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
             {LINE_ERRORS[line]}
           </div>
         )}
-        {loginOn && !identity ? (
-          <section className="gate">
-            <span className="eyebrow">LINE</span>
-            <h2>結帳前請先用 LINE 登入</h2>
-            <p>
-              {online
-                ? "我們用 LINE 確認是您本人下單，並用 LINE 通知付款與出貨。付款可選信用卡／Apple Pay、超商取貨付款，或送出訂單後由我們在 LINE 與您確認。"
-                : "我們用 LINE 確認是您本人下單，並用 LINE 通知付款與出貨。訂單送出後由我們在 LINE 與您確認付款方式。"}
-            </p>
-            <p>購物袋裡的商品會保留，登入後會回到這個結帳頁。</p>
-            <CartPreserveNote />
-            <a href="/api/line/login?next=/checkout" className="btn line-green">
-              使用 LINE 登入
-            </a>
-          </section>
-        ) : (
-          <CheckoutForm
-            identity={identity ? { name: identity.name } : null}
-            paymentNote={settings.paymentNote}
-            pickupPoints={enabledPickupPoints(settings)}
-            guest={!loginOn}
-            options={options}
-          />
+        {loginOn && !identity && (
+          <p className="notice" style={{ marginBottom: 20 }}>
+            結帳不需要登入。若希望之後在「我的訂單」看到 LINE 紀錄，可以先{" "}
+            <a href="/api/line/login?next=/checkout" className="link">用 LINE 登入</a>
+            。購物袋會保留。
+          </p>
         )}
+        <CheckoutForm
+          identity={identity ? { name: identity.name } : null}
+          paymentNote={settings.paymentNote}
+          pickupPoints={enabledPickupPoints(settings)}
+          options={options}
+        />
       </main>
       <Footer />
     </>

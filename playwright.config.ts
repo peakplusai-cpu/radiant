@@ -14,6 +14,8 @@ export default defineConfig({
       NEWEBPAY_MERCHANT_ID: "MS000TEST",
       NEWEBPAY_HASH_KEY: "e2eHashKeyThirtyTwoCharsLong0123",
       NEWEBPAY_HASH_IV: "e2eHashIV0123456",
+      NEWEBPAY_ENV: "test",
+      NEWEBPAY_METHODS: "credit,applepay,googlepay,linepay,vacc,cvs",
     },
   },
 });
