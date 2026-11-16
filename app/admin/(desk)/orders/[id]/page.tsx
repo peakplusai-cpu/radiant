@@ -5,7 +5,7 @@ import { updateOrder } from "@/app/actions/admin";
 import { OrderReceipt } from "@/components/OrderReceipt";
 import { CancelOrderButton } from "@/components/admin/CancelOrderButton";
 import { ORDER_STATUS_LABEL, OPEN_STATUSES } from "@/lib/format";
-import { nextStatuses } from "@/lib/order-flow";
+import { statusChoices } from "@/lib/order-flow";
 
 export default async function OrderAdmin({
   params,
@@ -36,11 +36,11 @@ export default async function OrderAdmin({
         </Link>
       </div>
       {updated && <div className="notice" style={{ marginBottom: 24 }}>訂單已更新。</div>}
-      {error && <div className="notice error" style={{ marginBottom: 24 }}>狀態無法這樣變更。</div>}
+      {error && <div className="notice error" style={{ marginBottom: 24 }}>狀態無法這樣變更。若客戶還沒付款或選擇門市，請等待付款完成，或先取消訂單。</div>}
       {cancelled && <div className="notice" style={{ marginBottom: 24 }}>訂單已取消，庫存已加回商品。</div>}
 
       <div className="form-grid">
-        <OrderReceipt order={order} />
+        <OrderReceipt order={order} staff />
         <div>
           <section className="panel">
             <h2>LINE 客戶</h2>
@@ -86,7 +86,7 @@ export default async function OrderAdmin({
                 <label className="field">
                   <span className="label">狀態</span>
                   <select className="select" name="status" defaultValue={order.status}>
-                    {nextStatuses(order.status).map((s) => (
+                    {statusChoices(order).map((s) => (
                       <option key={s} value={s}>
                         {ORDER_STATUS_LABEL[s]}
                       </option>

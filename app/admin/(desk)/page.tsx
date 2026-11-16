@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getAdminStore } from "@/lib/auth";
-import { formatDate, formatPrice, ORDER_STATUS_LABEL, OPEN_STATUSES } from "@/lib/format";
+import { formatDate, formatPrice, orderStatusLabel, OPEN_STATUSES } from "@/lib/format";
 import { totalStock } from "@/lib/products";
 
 export default async function Dashboard() {
@@ -84,7 +84,7 @@ export default async function Dashboard() {
                 <td>{formatDate(o.createdAt)}</td>
                 <td>
                   <span className={`badge${OPEN_STATUSES.includes(o.status) ? " on" : o.status === "cancelled" ? " mute" : ""}`}>
-                    {ORDER_STATUS_LABEL[o.status]}
+                    {orderStatusLabel(o)}
                   </span>
                 </td>
                 <td className="num right">{formatPrice(o.total)}</td>

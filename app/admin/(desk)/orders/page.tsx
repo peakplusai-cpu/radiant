@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getAdminStore } from "@/lib/auth";
-import { formatDate, formatPrice, ORDER_STATUS_LABEL, ORDER_STATUSES, OPEN_STATUSES } from "@/lib/format";
+import { formatDate, formatPrice, ORDER_STATUS_LABEL, orderStatusLabel, ORDER_STATUSES, OPEN_STATUSES } from "@/lib/format";
 import { CancelOrderButton } from "@/components/admin/CancelOrderButton";
 import type { OrderStatus } from "@/lib/types";
 
@@ -87,6 +87,9 @@ export default async function OrdersAdmin({ searchParams }: { searchParams: Prom
                   </td>
                   <td>
                     {o.recipient}
+                    {o.fulfillment === "cvs" && (
+                      <div style={{ fontSize: 12.5, color: "var(--teal-deep)", marginTop: 2 }}>超商{o.cvs?.storeName ? ` · ${o.cvs.storeType} ${o.cvs.storeName}` : ""}</div>
+                    )}
                     {o.fulfillment === "pickup" && (
                       <div style={{ fontSize: 12.5, color: "var(--teal-deep)", marginTop: 2 }}>自取{o.pickupPointName ? ` · ${o.pickupPointName}` : ""}</div>
                     )}
@@ -97,7 +100,7 @@ export default async function OrdersAdmin({ searchParams }: { searchParams: Prom
                   <td>{formatDate(o.createdAt)}</td>
                   <td>
                     <span className={`badge${OPEN_STATUSES.includes(o.status) ? " on" : o.status === "cancelled" ? " mute" : ""}`}>
-                      {ORDER_STATUS_LABEL[o.status]}
+                      {orderStatusLabel(o)}
                     </span>
                   </td>
                   <td className="num right">{formatPrice(o.total)}</td>

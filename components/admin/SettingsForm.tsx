@@ -132,9 +132,16 @@ export function SettingsForm({ settings, hasLoginSecret, hasMessagingToken, call
               <h2>運費與付款</h2>
               <div className="two">
                 <label className="field">
-                  <span className="label">運費 NT$</span>
+                  <span className="label">宅配運費 NT$</span>
                   <input className="input" type="number" min={0} name="shippingFee" defaultValue={settings.shippingFee} />
                 </label>
+                <label className="field">
+                  <span className="label">超商店到店運費 NT$</span>
+                  <input className="input" type="number" min={0} name="cvsShippingFee" defaultValue={settings.cvsShippingFee} />
+                  <span className="hint">7-ELEVEN、全家、萊爾富統一收這個金額；達免運門檻免收。</span>
+                </label>
+              </div>
+              <div className="two">
                 <label className="field">
                   <span className="label">免運門檻 NT$</span>
                   <input className="input" type="number" min={0} name="freeShippingThreshold" defaultValue={settings.freeShippingThreshold} />
@@ -143,7 +150,7 @@ export function SettingsForm({ settings, hasLoginSecret, hasMessagingToken, call
               <label className="field">
                 <span className="label">付款說明</span>
                 <textarea className="textarea" name="paymentNote" defaultValue={settings.paymentNote} maxLength={600} />
-                <span className="hint">顯示在結帳頁與訂單完成頁，例如匯款帳號或收款方式。</span>
+                <span className="hint">只在客戶選「LINE 確認付款」時顯示，例如匯款帳號或收款方式。信用卡／Apple Pay、超商取貨付款不會用到。</span>
               </label>
             </section>
 

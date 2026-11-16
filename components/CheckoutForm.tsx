@@ -6,7 +6,9 @@ import { useState } from "react";
 import { formatPrice } from "@/lib/format";
 import { clearCart } from "@/lib/cart-client";
 import { cleanPersonName, normalizeTaiwanPhone } from "@/lib/phone";
-import type { Fulfillment, PickupPoint } from "@/lib/types";
+import { startPayment } from "@/lib/pay-client";
+import { CVS_MAX_TOTAL, CVS_MIN_TOTAL, type PaymentOptions } from "@/lib/payment";
+import type { Fulfillment, PaymentMethod, PickupPoint } from "@/lib/types";
 import { variantLabel } from "@/lib/variants";
 import { ProductImage } from "./ProductImage";
 import { SummaryRows, totals, useCart } from "./CartView";
@@ -19,16 +21,38 @@ function idempotencyKey(): string {
   return next;
 }
 
+type Choice = { value: PaymentMethod; title: string; hint: string };
+
+function paymentChoices(method: Fulfillment, options: PaymentOptions): Choice[] {
+  const card: Choice = {
+    value: "online",
+    title: options.applePay ? "信用卡／Apple Pay" : "信用卡",
+    hint: method === "cvs" ? "先在藍新金流安全付款，取貨時不用再付錢" : "送出後前往藍新金流安全付款頁",
+  };
+  if (method === "cvs") {
+    const list: Choice[] = [];
+    if (options.cvs) list.push({ value: "cod", title: "超商取貨付款", hint: "到門市取貨時再付款" });
+    if (options.card) list.push(card);
+    return list;
+  }
+  const list: Choice[] = [];
+  if (options.card) list.push(card);
+  list.push({ value: "line", title: "LINE 確認付款", hint: "送出訂單後，由我們在 LINE 與您確認付款方式" });
+  return list;
+}
+
 export function CheckoutForm({
   identity,
   paymentNote,
   pickupPoints,
   guest,
+  options,
 }: {
   identity: { name: string } | null;
   paymentNote: string;
   pickupPoints: PickupPoint[];
   guest: boolean;
+  options: PaymentOptions;
 }) {
   const router = useRouter();
   const { data, reload } = useCart();
@@ -37,7 +61,20 @@ export function CheckoutForm({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [method, setMethod] = useState<Fulfillment>("delivery");
   const [pickupId, setPickupId] = useState(pickupPoints[0]?.id ?? "");
+  const [payment, setPayment] = useState<PaymentMethod>(options.card ? "online" : "line");
   const pickupOn = pickupPoints.length > 0 && method === "pickup";
+  const cvsOn = options.cvs && method === "cvs";
+  const choices = paymentChoices(method, options);
+  const chosen = choices.find((choice) => choice.value === payment) ?? choices[0];
+  const methods: { value: Fulfillment; label: string }[] = [{ value: "delivery", label: "宅配" }];
+  if (options.cvs) methods.push({ value: "cvs", label: "超商店到店" });
+  if (pickupPoints.length > 0) methods.push({ value: "pickup", label: "自取" });
+
+  function chooseMethod(next: Fulfillment) {
+    setMethod(next);
+    const available = paymentChoices(next, options);
+    setPayment(available[0]?.value ?? "line");
+  }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -50,10 +87,11 @@ export function CheckoutForm({
     const nextErrors: Record<string, string> = {};
     if (!cleanPersonName(recipient)) nextErrors.recipient = "請填寫收件人姓名";
     if (!normalizeTaiwanPhone(phone)) nextErrors.phone = "請填寫有效的台灣電話，例如 0912345678";
-    if (!pickupOn && address.trim().length < 6) nextErrors.address = "請填寫完整收件地址";
+    if (!pickupOn && !cvsOn && address.trim().length < 6) nextErrors.address = "請填寫完整收件地址";
     if (pickupOn && !pickupId) nextErrors.pickup = "請選擇自取地點";
     setFieldErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
+    if (!chosen) return;
 
     setBusy(true);
     try {
@@ -64,14 +102,15 @@ export function CheckoutForm({
           items: data.lines.map((line) => ({ productId: line.productId, variantId: line.variantId, qty: line.qty })),
           recipient,
           phone,
-          address: pickupOn ? "" : address,
+          address: pickupOn || cvsOn ? "" : address,
           note: form.get("note"),
-          fulfillment: pickupOn ? "pickup" : "delivery",
+          fulfillment: pickupOn ? "pickup" : cvsOn ? "cvs" : "delivery",
+          payment: chosen.value,
           pickupPointId: pickupOn ? pickupId : "",
           idempotencyKey: idempotencyKey(),
         }),
       });
-      const json = (await res.json()) as { code?: string; error?: string };
+      const json = (await res.json()) as { code?: string; pay?: boolean; error?: string };
       if (!res.ok || !json.code) {
         setError(json.error ?? "送出失敗，請稍後再試");
         await reload();
@@ -80,6 +119,10 @@ export function CheckoutForm({
       }
       sessionStorage.removeItem("radiant.checkout-key");
       clearCart();
+      if (json.pay) {
+        const failed = await startPayment(json.code);
+        if (!failed) return;
+      }
       router.push(`/order/${json.code}`);
     } catch {
       setError("網路連線異常，請再試一次。若已看到訂單成立，請勿重複送出。");
@@ -98,6 +141,8 @@ export function CheckoutForm({
     );
   }
   const blocked = data.lines.some((line) => line.stock < 1 || line.qty > line.stock);
+  const sum = totals(data, { pickup: pickupOn, cvs: cvsOn }).total;
+  const cvsOutOfRange = cvsOn && (sum < CVS_MIN_TOTAL || sum > CVS_MAX_TOTAL);
   const selected = pickupPoints.find((point) => point.id === pickupId);
 
   return (
@@ -117,15 +162,18 @@ export function CheckoutForm({
           </div>
         ) : null}
 
-        {pickupPoints.length > 0 && (
+        {methods.length > 1 && (
           <div className="method-switch" role="radiogroup" aria-label="取貨方式">
-            <button type="button" className={method === "delivery" ? "on" : ""} aria-pressed={method === "delivery"} onClick={() => setMethod("delivery")}>宅配</button>
-            <button type="button" className={method === "pickup" ? "on" : ""} aria-pressed={method === "pickup"} onClick={() => setMethod("pickup")}>自取</button>
+            {methods.map((item) => (
+              <button key={item.value} type="button" className={method === item.value ? "on" : ""} aria-pressed={method === item.value} onClick={() => chooseMethod(item.value)} disabled={busy}>
+                {item.label}
+              </button>
+            ))}
           </div>
         )}
 
         <h2 style={{ fontFamily: "var(--serif-tc)", fontSize: 20, marginBottom: 22, letterSpacing: "0.08em" }}>
-          {pickupOn ? "自取資料" : "收件資料"}
+          {pickupOn ? "自取資料" : cvsOn ? "取貨人資料" : "收件資料"}
         </h2>
         <div className="two">
           <label className="field">
@@ -154,6 +202,10 @@ export function CheckoutForm({
             ))}
             {fieldErrors.pickup && <span className="field-error">{fieldErrors.pickup}</span>}
           </div>
+        ) : cvsOn ? (
+          <div className="notice" style={{ marginBottom: 20 }}>
+            下一步會前往藍新金流頁面，在那裡選擇 7-ELEVEN、全家或萊爾富門市，並填寫取貨人姓名與手機。取貨時請帶證件，姓名須與藍新頁面填寫的相同。
+          </div>
         ) : (
           <label className="field">
             <span className="label">收件地址</span>
@@ -170,7 +222,28 @@ export function CheckoutForm({
             自取不收運費。商品備妥後我們會透過 LINE 通知您前往「{selected.name}」取貨。
           </div>
         )}
-        {paymentNote && <div className="notice">{paymentNote}</div>}
+        {choices.length > 1 && (
+          <fieldset className="pay-choices" aria-label="付款方式" style={{ border: 0, padding: 0, margin: "0 0 20px" }}>
+            <legend className="label" style={{ marginBottom: 10 }}>付款方式</legend>
+            <div className="pickup-list">
+              {choices.map((choice) => (
+                <label key={choice.value} className={`pickup-choice${chosen?.value === choice.value ? " on" : ""}`}>
+                  <input type="radio" name="payment" value={choice.value} checked={chosen?.value === choice.value} onChange={() => setPayment(choice.value)} disabled={busy} />
+                  <span>
+                    <b>{choice.title}</b>
+                    <small>{choice.hint}</small>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
+        {cvsOn && (
+          <p style={{ fontSize: 13, color: "var(--muted)", margin: "0 0 20px" }}>
+            超商取貨訂單金額須在 NT$ {CVS_MIN_TOTAL}–{CVS_MAX_TOTAL.toLocaleString("en-US")} 之間。
+          </p>
+        )}
+        {chosen?.value === "line" && paymentNote && <div className="notice">{paymentNote}</div>}
       </div>
 
       <aside className="summary">
@@ -192,10 +265,16 @@ export function CheckoutForm({
             </div>
           ))}
         </div>
-        <SummaryRows data={data} pickup={pickupOn} />
+        <SummaryRows data={data} pickup={pickupOn} cvs={cvsOn} />
         {error && <div className="notice error" style={{ marginTop: 20 }} role="alert">{error}</div>}
-        <button type="submit" className="btn solid" disabled={busy || blocked}>
-          {busy ? "送出中…" : blocked ? "庫存不足" : `送出訂單 · ${formatPrice(totals(data, { pickup: pickupOn }).total)}`}
+        <button type="submit" className="btn solid" disabled={busy || blocked || cvsOutOfRange}>
+          {busy
+            ? "處理中…"
+            : blocked
+              ? "庫存不足"
+              : cvsOutOfRange
+                ? "金額不適用超商取貨"
+                : `${chosen?.value === "online" ? "前往付款" : chosen?.value === "cod" ? "確認訂單" : "送出訂單"} · ${formatPrice(sum)}`}
         </button>
         {blocked && (
           <p style={{ fontSize: 13, color: "var(--alert)", margin: "12px 0 0" }}>

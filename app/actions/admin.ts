@@ -241,7 +241,7 @@ export async function shipAllForCustomer(form: FormData): Promise<void> {
   const customerId = str(form, "customerId", 80);
   const { orders } = await getStore();
   for (const order of orders) {
-    if (order.customerId === customerId && OPEN_STATUSES.includes(order.status)) {
+    if (order.customerId === customerId && OPEN_STATUSES.includes(order.status) && order.fulfillment !== "cvs") {
       await changeOrder(order.id, "shipped", order.internalNote);
     }
   }
@@ -274,6 +274,7 @@ export async function saveSettings(_prev: string, form: FormData): Promise<strin
     settings.tagline = str(form, "tagline", 120);
     settings.announcement = str(form, "announcement", 160);
     settings.shippingFee = Math.max(0, Math.round(num(str(form, "shippingFee", 10))));
+    settings.cvsShippingFee = Math.max(0, Math.round(num(str(form, "cvsShippingFee", 10))));
     settings.freeShippingThreshold = Math.max(0, Math.round(num(str(form, "freeShippingThreshold", 10))));
     settings.paymentNote = str(form, "paymentNote", 600);
     settings.lineOaName = str(form, "lineOaName", 60);

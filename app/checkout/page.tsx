@@ -5,6 +5,7 @@ import { CartPreserveNote } from "@/components/CartPreserveNote";
 import { getStore } from "@/lib/store";
 import { getLineIdentity, lineLoginEnabled } from "@/lib/line";
 import { enabledPickupPoints } from "@/lib/pickup";
+import { paymentOptions } from "@/lib/newebpay";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "結帳" };
@@ -21,6 +22,8 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
   const { settings } = await getStore();
   const identity = await getLineIdentity();
   const loginOn = lineLoginEnabled(settings);
+  const options = paymentOptions();
+  const online = options.card || options.cvs;
 
   return (
     <>
@@ -39,7 +42,11 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
           <section className="gate">
             <span className="eyebrow">LINE</span>
             <h2>結帳前請先用 LINE 登入</h2>
-            <p>我們用 LINE 確認是您本人下單，並用 LINE 通知付款與出貨。網站沒有刷卡，訂單送出後由我們在 LINE 與您確認。</p>
+            <p>
+              {online
+                ? "我們用 LINE 確認是您本人下單，並用 LINE 通知付款與出貨。付款可選信用卡／Apple Pay、超商取貨付款，或送出訂單後由我們在 LINE 與您確認。"
+                : "我們用 LINE 確認是您本人下單，並用 LINE 通知付款與出貨。訂單送出後由我們在 LINE 與您確認付款方式。"}
+            </p>
             <p>購物袋裡的商品會保留，登入後會回到這個結帳頁。</p>
             <CartPreserveNote />
             <a href="/api/line/login?next=/checkout" className="btn line-green">
@@ -52,6 +59,7 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
             paymentNote={settings.paymentNote}
             pickupPoints={enabledPickupPoints(settings)}
             guest={!loginOn}
+            options={options}
           />
         )}
       </main>

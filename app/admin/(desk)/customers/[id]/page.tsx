@@ -2,9 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAdminStore } from "@/lib/auth";
 import { saveCustomerNote, shipAllForCustomer } from "@/app/actions/admin";
-import { formatDate, formatPrice, ORDER_STATUS_LABEL, OPEN_STATUSES } from "@/lib/format";
+import { formatDate, formatPrice, orderStatusLabel, OPEN_STATUSES } from "@/lib/format";
 import { variantLabel } from "@/lib/variants";
 import { PrintButton } from "@/components/admin/PrintButton";
+import { awaitingCustomer } from "@/lib/payment";
 
 export default async function CustomerAdmin({
   params,
@@ -20,7 +21,8 @@ export default async function CustomerAdmin({
   if (!customer) notFound();
 
   const mine = orders.filter((o) => o.customerId === id).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  const open = mine.filter((o) => OPEN_STATUSES.includes(o.status));
+  const open = mine.filter((o) => OPEN_STATUSES.includes(o.status) && o.fulfillment !== "cvs" && !awaitingCustomer(o));
+  const cvsOpen = mine.filter((o) => OPEN_STATUSES.includes(o.status) && o.fulfillment === "cvs");
 
   const merged = new Map<string, { name: string; color: string; size: string; hex: string; qty: number; amount: number }>();
   for (const o of open) {
@@ -36,6 +38,8 @@ export default async function CustomerAdmin({
   const mergedQty = mergedItems.reduce((s, i) => s + i.qty, 0);
   const itemsTotal = open.reduce((s, o) => s + o.subtotal, 0);
   const shippingTotal = open.reduce((s, o) => s + o.shipping, 0);
+  const collectTotal = open.filter((o) => o.paymentMethod === "line").reduce((s, o) => s + o.total, 0);
+  const prepaidTotal = open.reduce((s, o) => s + o.total, 0) - collectTotal;
   const addresses = [...new Map(open.map((o) => [`${o.fulfillment}|${o.recipient}|${o.phone}|${o.address}`, o])).values()];
   const notes = open.filter((o) => o.note).map((o) => `${o.code}：${o.note}`);
   const spent = mine.filter((o) => o.status !== "cancelled").reduce((s, o) => s + o.total, 0);
@@ -58,6 +62,11 @@ export default async function CustomerAdmin({
           <section className="merge-box">
             <span className="eyebrow">Combined shipment</span>
             <h2 style={{ marginTop: 6 }}>合併出貨單</h2>
+            {cvsOpen.length > 0 && (
+              <div className="notice hide-print" style={{ margin: "12px 0" }}>
+                另有 {cvsOpen.length} 張超商店到店訂單（{cvsOpen.map((o) => o.code).join("、")}）要各自在藍新列印寄件單，請到訂單頁個別處理。
+              </div>
+            )}
             {open.length === 0 ? (
               <p style={{ color: "var(--muted)", margin: "10px 0 0" }}>目前沒有待處理的訂單。</p>
             ) : (
@@ -97,7 +106,10 @@ export default async function CustomerAdmin({
                     {open.length > 1 && shippingTotal > 0 && <span style={{ color: "var(--muted)" }}>（合併出貨時可酌情退運費）</span>}
                   </dd>
                   <dt>應收總額</dt>
-                  <dd>{formatPrice(itemsTotal + shippingTotal)}</dd>
+                  <dd>
+                    {formatPrice(collectTotal)}
+                    {prepaidTotal > 0 && <span style={{ color: "var(--muted)" }}>（另有 {formatPrice(prepaidTotal)} 已線上付款，不需再收）</span>}
+                  </dd>
                   <dt>{addresses.length > 1 ? "收件資料（多組）" : "收件資料"}</dt>
                   <dd>
                     {addresses.map((o) => (
@@ -156,7 +168,7 @@ export default async function CustomerAdmin({
                   <td>{formatDate(o.createdAt)}</td>
                   <td>
                     <span className={`badge${OPEN_STATUSES.includes(o.status) ? " on" : o.status === "cancelled" ? " mute" : ""}`}>
-                      {ORDER_STATUS_LABEL[o.status]}
+                      {orderStatusLabel(o)}
                     </span>
                   </td>
                   <td className="num right">{formatPrice(o.total)}</td>

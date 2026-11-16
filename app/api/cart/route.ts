@@ -39,6 +39,7 @@ export async function POST(request: Request) {
   return NextResponse.json({
     lines,
     shippingFee: settings.shippingFee,
+    cvsShippingFee: settings.cvsShippingFee,
     freeShippingThreshold: settings.freeShippingThreshold,
   });
 }

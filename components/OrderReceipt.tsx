@@ -1,9 +1,10 @@
-import { formatDate, formatPrice, fulfillmentLabel, ORDER_STATUS_LABEL } from "@/lib/format";
+import { formatDate, formatPrice, fulfillmentLabel, orderStatusLabel } from "@/lib/format";
+import { paymentLabel } from "@/lib/payment";
 import { variantLabel } from "@/lib/variants";
 import type { Order } from "@/lib/types";
 import { ProductImage } from "./ProductImage";
 
-export function OrderReceipt({ order, showAddress = true }: { order: Order; showAddress?: boolean }) {
+export function OrderReceipt({ order, showAddress = true, staff = false }: { order: Order; showAddress?: boolean; staff?: boolean }) {
   return (
     <section className="receipt">
       <div className="receipt-head">
@@ -13,7 +14,7 @@ export function OrderReceipt({ order, showAddress = true }: { order: Order; show
           <div style={{ color: "var(--muted)", fontSize: 13, marginTop: 4 }}>{formatDate(order.createdAt)}</div>
         </div>
         <div>
-          <span className={`status-pill ${order.status}`}>{ORDER_STATUS_LABEL[order.status]}</span>
+          <span className={`status-pill ${order.status}`}>{orderStatusLabel(order)}</span>
         </div>
       </div>
       <div className="mini-lines">
@@ -39,7 +40,7 @@ export function OrderReceipt({ order, showAddress = true }: { order: Order; show
           <span>{formatPrice(order.subtotal)}</span>
         </div>
         <div className="sum-row">
-          <span>{order.fulfillment === "pickup" ? "運費（自取）" : "運費"}</span>
+          <span>{order.fulfillment === "pickup" ? "運費（自取）" : order.fulfillment === "cvs" ? "運費（超商店到店）" : "運費"}</span>
           <span>{order.shipping === 0 ? "免運" : formatPrice(order.shipping)}</span>
         </div>
         <div className="sum-row total">
@@ -51,12 +52,56 @@ export function OrderReceipt({ order, showAddress = true }: { order: Order; show
         <dl className="kv" style={{ marginTop: 28, paddingTop: 22, borderTop: "1px solid var(--teal-soft)" }}>
           <dt>取貨方式</dt>
           <dd>{fulfillmentLabel(order.fulfillment)}</dd>
+          <dt>付款方式</dt>
+          <dd>
+            {paymentLabel(order.paymentMethod, order.fulfillment)}
+            {order.paidAt && order.paymentMethod === "online" ? `（${formatDate(order.paidAt)} 已付款）` : ""}
+          </dd>
           <dt>姓名</dt>
           <dd>{order.recipient}</dd>
           <dt>電話</dt>
           <dd>{order.phone}</dd>
-          <dt>{order.fulfillment === "pickup" ? "自取地點" : "地址"}</dt>
-          <dd>{order.address || order.pickupPointName}</dd>
+          {order.fulfillment === "cvs" ? (
+            <>
+              <dt>取貨門市</dt>
+              <dd>
+                {order.cvs?.storeName ? `${order.cvs.storeType} ${order.cvs.storeName}`.trim() : "尚未選擇門市"}
+                {order.cvs?.storeAddr && <div style={{ color: "var(--muted)", fontSize: 13 }}>{order.cvs.storeAddr}</div>}
+              </dd>
+              {order.cvs?.pickupName && (
+                <>
+                  <dt>取貨人</dt>
+                  <dd>
+                    {order.cvs.pickupName}
+                    {order.cvs.pickupPhone ? ` ${order.cvs.pickupPhone}` : ""}
+                  </dd>
+                </>
+              )}
+              {staff && order.cvs?.lgsNo && (
+                <>
+                  <dt>寄件代碼</dt>
+                  <dd className="mono">{order.cvs.lgsNo}</dd>
+                </>
+              )}
+              {staff && order.payTradeNo && (
+                <>
+                  <dt>藍新序號</dt>
+                  <dd className="mono">{order.payTradeNo}</dd>
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              <dt>{order.fulfillment === "pickup" ? "自取地點" : "地址"}</dt>
+              <dd>{order.address || order.pickupPointName}</dd>
+              {staff && order.payTradeNo && (
+                <>
+                  <dt>藍新序號</dt>
+                  <dd className="mono">{order.payTradeNo}</dd>
+                </>
+              )}
+            </>
+          )}
           {order.note && (
             <>
               <dt>備註</dt>

@@ -20,7 +20,7 @@ export type CartLineView = {
   qty: number;
 };
 
-export type CartData = { lines: CartLineView[]; shippingFee: number; freeShippingThreshold: number };
+export type CartData = { lines: CartLineView[]; shippingFee: number; cvsShippingFee: number; freeShippingThreshold: number };
 
 export function useCart() {
   const [data, setData] = useState<CartData | null>(null);
@@ -31,7 +31,7 @@ export function useCart() {
     const items = readCart();
     const id = ++requestId.current;
     if (!items.length) {
-      if (id === requestId.current) setData({ lines: [], shippingFee: 0, freeShippingThreshold: 0 });
+      if (id === requestId.current) setData({ lines: [], shippingFee: 0, cvsShippingFee: 0, freeShippingThreshold: 0 });
       return;
     }
     const res = await fetch("/api/cart", {
@@ -64,15 +64,16 @@ export function useCart() {
   return { data, dropped, reload: load, setData };
 }
 
-export function totals(data: CartData, opts?: { pickup?: boolean }) {
+export function totals(data: CartData, opts?: { pickup?: boolean; cvs?: boolean }) {
   const subtotal = data.lines.reduce((sum, line) => sum + line.price * line.qty, 0);
   const free = data.freeShippingThreshold > 0 && subtotal >= data.freeShippingThreshold;
-  const shipping = opts?.pickup || data.lines.length === 0 || free ? 0 : data.shippingFee;
+  const fee = opts?.cvs ? data.cvsShippingFee : data.shippingFee;
+  const shipping = opts?.pickup || data.lines.length === 0 || free ? 0 : fee;
   return { subtotal, shipping, total: subtotal + shipping };
 }
 
-export function SummaryRows({ data, pickup = false }: { data: CartData; pickup?: boolean }) {
-  const { subtotal, shipping, total } = totals(data, { pickup });
+export function SummaryRows({ data, pickup = false, cvs = false }: { data: CartData; pickup?: boolean; cvs?: boolean }) {
+  const { subtotal, shipping, total } = totals(data, { pickup, cvs });
   const remain = data.freeShippingThreshold - subtotal;
   return (
     <>
@@ -81,7 +82,7 @@ export function SummaryRows({ data, pickup = false }: { data: CartData; pickup?:
         <span>{formatPrice(subtotal)}</span>
       </div>
       <div className="sum-row">
-        <span>{pickup ? "運費（自取）" : "運費"}</span>
+        <span>{pickup ? "運費（自取）" : cvs ? "運費（超商店到店）" : "運費"}</span>
         <span>{shipping === 0 ? "免運" : formatPrice(shipping)}</span>
       </div>
       {!pickup && data.freeShippingThreshold > 0 && remain > 0 && data.lines.length > 0 && (

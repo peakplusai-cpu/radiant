@@ -6,6 +6,8 @@ import { parseCheckoutBody, resolveCheckoutIdentity } from "@/lib/checkout";
 import { clientIp, sameOrigin } from "@/lib/http";
 import { rateLimit } from "@/lib/rate-limit";
 import { grantReceipt } from "@/lib/receipt";
+import { paymentOptions } from "@/lib/newebpay";
+import { optionsAllow } from "@/lib/payment";
 
 export async function POST(request: Request) {
   if (!sameOrigin(request.headers)) {
@@ -19,6 +21,10 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const parsed = parseCheckoutBody(body);
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+
+  if (!optionsAllow(paymentOptions(), parsed.data.fulfillment, parsed.data.payment)) {
+    return NextResponse.json({ error: "目前無法使用這個付款方式，請重新整理後再試" }, { status: 400 });
+  }
 
   const { settings } = await getStore();
   const session = await getLineIdentity();
@@ -37,6 +43,7 @@ export async function POST(request: Request) {
       phone: parsed.data.phone,
       address: parsed.data.address,
       fulfillment: parsed.data.fulfillment,
+      payment: parsed.data.payment,
       pickupPointId: parsed.data.pickupPointId,
       note: parsed.data.note,
       idempotencyKey: parsed.data.idempotencyKey,
@@ -44,7 +51,7 @@ export async function POST(request: Request) {
     });
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: 409 });
     await grantReceipt(result.order.code);
-    return NextResponse.json({ code: result.order.code });
+    return NextResponse.json({ code: result.order.code, pay: result.order.paymentMethod !== "line" });
   } catch {
     console.error("checkout failed");
     return NextResponse.json({ error: "系統忙碌，請稍後再試" }, { status: 500 });
