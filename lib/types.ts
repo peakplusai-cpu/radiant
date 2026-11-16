@@ -40,7 +40,21 @@ export type Product = {
 };
 
 export type OrderStatus = "pending" | "paid" | "shipped" | "completed" | "cancelled";
-export type Fulfillment = "delivery" | "pickup";
+export type Fulfillment = "delivery" | "pickup" | "cvs";
+/** line: staff confirm over LINE. online: card / Apple Pay on NewebPay. cod: pay at the convenience store. */
+export type PaymentMethod = "line" | "online" | "cod";
+
+export type CvsInfo = {
+  storeCode: string;
+  storeName: string;
+  storeAddr: string;
+  /** 7-ELEVEN / 全家 / 萊爾富 / OK mart, as reported by NewebPay. */
+  storeType: string;
+  pickupName: string;
+  pickupPhone: string;
+  /** 寄件代碼 — staff print the shipping label from the NewebPay dashboard. */
+  lgsNo: string;
+};
 
 export type PickupPoint = {
   id: string;
@@ -87,6 +101,20 @@ export type Order = {
   fulfillment: Fulfillment;
   pickupPointId: string;
   pickupPointName: string;
+  paymentMethod: PaymentMethod;
+  /** ISO time the card payment or COD store selection completed. Empty while unpaid. */
+  paidAt: string;
+  /** NewebPay TradeNo of the successful payment or COD order. */
+  payTradeNo: string;
+  payType: string;
+  /** How many NewebPay payment pages were opened (each uses its own MerchantOrderNo). */
+  payAttempts: number;
+  /**
+   * Stock is held until this time while the customer has not finished paying
+   * or choosing a store on NewebPay. Empty once the order is confirmed.
+   */
+  holdUntil: string;
+  cvs: CvsInfo | null;
   note: string;
   items: OrderItem[];
   subtotal: number;
@@ -110,6 +138,8 @@ export type Settings = {
   tagline: string;
   announcement: string;
   shippingFee: number;
+  /** Flat 超商店到店 fee shown at checkout (before free-shipping). */
+  cvsShippingFee: number;
   freeShippingThreshold: number;
   paymentNote: string;
   lineOaName: string;

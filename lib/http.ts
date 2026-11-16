@@ -13,7 +13,7 @@ export function contentSecurityPolicy(dev: boolean): string {
     "frame-ancestors 'none'",
     "frame-src 'none'",
     "base-uri 'self'",
-    "form-action 'self'",
+    "form-action 'self' https://ccore.newebpay.com https://core.newebpay.com",
     "object-src 'none'",
     ...(dev ? [] : ["upgrade-insecure-requests"]),
   ].join("; ");

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { cleanNote, cleanPersonName, normalizeTaiwanPhone } from "./phone";
-import type { Fulfillment } from "./types";
+import { paymentAllowed } from "./payment";
+import type { Fulfillment, PaymentMethod } from "./types";
 
 const bodySchema = z
   .object({
@@ -18,7 +19,8 @@ const bodySchema = z
     phone: z.string().trim().min(1).max(30),
     address: z.string().trim().max(200).optional().default(""),
     note: z.string().max(300).optional().default(""),
-    fulfillment: z.enum(["delivery", "pickup"]).optional().default("delivery"),
+    fulfillment: z.enum(["delivery", "pickup", "cvs"]).optional().default("delivery"),
+    payment: z.enum(["line", "online", "cod"]).optional().default("line"),
     pickupPointId: z.string().trim().max(80).optional().default(""),
     idempotencyKey: z.string().trim().regex(/^[A-Za-z0-9_-]{8,80}$/),
   })
@@ -31,6 +33,7 @@ export type CheckoutBody = {
   address: string;
   note: string;
   fulfillment: Fulfillment;
+  payment: PaymentMethod;
   pickupPointId: string;
   idempotencyKey: string;
 };
@@ -54,13 +57,15 @@ export function parseCheckoutBody(input: unknown): { ok: true; data: CheckoutBod
   const address = cleanNote(parsed.data.address, 200);
   if (fulfillment === "delivery" && address.length < 6) return { ok: false, error: "請填寫完整收件地址" };
   if (fulfillment === "pickup" && !parsed.data.pickupPointId) return { ok: false, error: "請選擇自取地點" };
+  if (!paymentAllowed(fulfillment, parsed.data.payment)) return { ok: false, error: "這個取貨方式不能使用所選的付款方式" };
   return {
     ok: true,
     data: {
       ...parsed.data,
       recipient,
       phone,
-      address,
+      address: fulfillment === "delivery" ? address : "",
+      pickupPointId: fulfillment === "pickup" ? parsed.data.pickupPointId : "",
       note: cleanNote(parsed.data.note, 300),
       fulfillment,
     },

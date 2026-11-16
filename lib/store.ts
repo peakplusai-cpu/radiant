@@ -6,7 +6,7 @@ import { supabaseAdmin, supabaseConfigured, supabaseUrl } from "./supabase";
 import { sanitizePickupPoints } from "./pickup";
 import { sanitizeWall } from "./wall";
 import { migrateProduct } from "./variants";
-import { DEFAULT_FREE_SHIPPING, DEFAULT_SHIPPING_FEE } from "./pricing";
+import { DEFAULT_CVS_FEE, DEFAULT_FREE_SHIPPING, DEFAULT_SHIPPING_FEE } from "./pricing";
 
 if (typeof window !== "undefined") {
   throw new Error("lib/store.ts is server-only");
@@ -26,6 +26,7 @@ function defaultSettings(): Settings {
     tagline: "",
     announcement: "",
     shippingFee: DEFAULT_SHIPPING_FEE,
+    cvsShippingFee: DEFAULT_CVS_FEE,
     freeShippingThreshold: DEFAULT_FREE_SHIPPING,
     paymentNote: "送出訂單後，我們會透過 LINE 與您確認並提供付款方式。",
     lineOaName: "",
@@ -48,10 +49,31 @@ function normalizeItem(item: Partial<OrderItem>): OrderItem {
   };
 }
 
+function normalizeCvs(cvs: Order["cvs"] | undefined): Order["cvs"] {
+  if (!cvs || typeof cvs !== "object") return null;
+  const text = (value: unknown) => (typeof value === "string" ? value : "");
+  return {
+    storeCode: text(cvs.storeCode),
+    storeName: text(cvs.storeName),
+    storeAddr: text(cvs.storeAddr),
+    storeType: text(cvs.storeType),
+    pickupName: text(cvs.pickupName),
+    pickupPhone: text(cvs.pickupPhone),
+    lgsNo: text(cvs.lgsNo),
+  };
+}
+
 function normalizeOrder(order: Partial<Order>): Order {
   return {
     ...(order as Order),
-    fulfillment: order.fulfillment === "pickup" ? "pickup" : "delivery",
+    fulfillment: order.fulfillment === "pickup" || order.fulfillment === "cvs" ? order.fulfillment : "delivery",
+    paymentMethod: order.paymentMethod === "online" || order.paymentMethod === "cod" ? order.paymentMethod : "line",
+    paidAt: typeof order.paidAt === "string" ? order.paidAt : "",
+    payTradeNo: typeof order.payTradeNo === "string" ? order.payTradeNo : "",
+    payType: typeof order.payType === "string" ? order.payType : "",
+    payAttempts: Number.isFinite(order.payAttempts) ? Math.max(0, Math.floor(order.payAttempts as number)) : 0,
+    holdUntil: typeof order.holdUntil === "string" ? order.holdUntil : "",
+    cvs: normalizeCvs(order.cvs),
     pickupPointId: typeof order.pickupPointId === "string" ? order.pickupPointId : "",
     pickupPointName: typeof order.pickupPointName === "string" ? order.pickupPointName : "",
     items: (order.items ?? []).map(normalizeItem),
@@ -70,6 +92,7 @@ function normalize(parsed: Partial<Store>): Store {
     pickupPoints: sanitizePickupPoints(parsed.settings?.pickupPoints),
   };
   if (!settings.secret) settings.secret = defaults.secret;
+  if (!Number.isFinite(settings.cvsShippingFee) || settings.cvsShippingFee < 0) settings.cvsShippingFee = defaults.cvsShippingFee;
   return {
     admin: parsed.admin ?? null,
     settings,

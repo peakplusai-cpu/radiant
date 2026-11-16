@@ -83,6 +83,7 @@ describe("redirects, headers, passwords, cart", () => {
     expect(headers.get("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
     expect(headers.get("Content-Security-Policy")).toContain("frame-ancestors 'none'");
     expect(headers.get("Content-Security-Policy")).toContain("https://*.supabase.co");
+    expect(headers.get("Content-Security-Policy")).toContain("form-action 'self' https://ccore.newebpay.com https://core.newebpay.com");
     expect(headers.get("Permissions-Policy")).toContain("camera=()");
     expect(headers.get("Strict-Transport-Security")).toContain("max-age=");
   });

@@ -1,4 +1,5 @@
-import type { Fulfillment, OrderStatus } from "./types";
+import { awaitingCustomer } from "./payment";
+import type { Fulfillment, Order, OrderStatus } from "./types";
 
 export function formatPrice(n: number): string {
   return `NT$ ${Math.round(n).toLocaleString("en-US")}`;
@@ -29,5 +30,13 @@ export const ORDER_STATUSES: OrderStatus[] = ["pending", "paid", "shipped", "com
 export const OPEN_STATUSES: OrderStatus[] = ["pending", "paid"];
 
 export function fulfillmentLabel(kind: Fulfillment | undefined): string {
+  if (kind === "cvs") return "超商店到店";
   return kind === "pickup" ? "自取" : "宅配";
+}
+
+/** Status text that accounts for online payment and pay-at-pickup orders. */
+export function orderStatusLabel(order: Pick<Order, "status" | "paymentMethod" | "holdUntil">): string {
+  if (awaitingCustomer(order)) return order.paymentMethod === "cod" ? "待選門市" : "待付款";
+  if (order.status === "pending" && order.paymentMethod === "cod") return "待出貨（取貨付款）";
+  return ORDER_STATUS_LABEL[order.status];
 }
