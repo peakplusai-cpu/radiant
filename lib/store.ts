@@ -69,8 +69,12 @@ function normalizeOrder(order: Partial<Order>): Order {
     fulfillment: order.fulfillment === "pickup" || order.fulfillment === "cvs" ? order.fulfillment : "delivery",
     paymentMethod: order.paymentMethod === "online" || order.paymentMethod === "cod" ? order.paymentMethod : "line",
     paidAt: typeof order.paidAt === "string" ? order.paidAt : "",
+    email: typeof order.email === "string" ? order.email : "",
     payTradeNo: typeof order.payTradeNo === "string" ? order.payTradeNo : "",
     payType: typeof order.payType === "string" ? order.payType : "",
+    payBankCode: typeof order.payBankCode === "string" ? order.payBankCode : "",
+    payCodeNo: typeof order.payCodeNo === "string" ? order.payCodeNo : "",
+    payExpire: typeof order.payExpire === "string" ? order.payExpire : "",
     payAttempts: Number.isFinite(order.payAttempts) ? Math.max(0, Math.floor(order.payAttempts as number)) : 0,
     holdUntil: typeof order.holdUntil === "string" ? order.holdUntil : "",
     cvs: normalizeCvs(order.cvs),
@@ -81,7 +85,11 @@ function normalizeOrder(order: Partial<Order>): Order {
 }
 
 function normalizeCustomer(customer: Partial<Customer>): Customer {
-  return { ...(customer as Customer), phone: typeof customer.phone === "string" ? customer.phone : "" };
+  return {
+    ...(customer as Customer),
+    phone: typeof customer.phone === "string" ? customer.phone : "",
+    email: typeof customer.email === "string" ? customer.email : "",
+  };
 }
 
 function normalize(parsed: Partial<Store>): Store {

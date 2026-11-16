@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { formatPrice } from "@/lib/format";
 import { clearCart } from "@/lib/cart-client";
-import { cleanPersonName, normalizeTaiwanPhone } from "@/lib/phone";
+import { cleanEmail, cleanPersonName, normalizeTaiwanMobile } from "@/lib/phone";
 import { startPayment } from "@/lib/pay-client";
-import { CVS_MAX_TOTAL, CVS_MIN_TOTAL, type PaymentOptions } from "@/lib/payment";
+import { CVS_MAX_TOTAL, CVS_MIN_TOTAL, onlineEnabled, onlineTitle, type PaymentOptions } from "@/lib/payment";
 import type { Fulfillment, PaymentMethod, PickupPoint } from "@/lib/types";
 import { variantLabel } from "@/lib/variants";
 import { ProductImage } from "./ProductImage";
@@ -26,17 +26,17 @@ type Choice = { value: PaymentMethod; title: string; hint: string };
 function paymentChoices(method: Fulfillment, options: PaymentOptions): Choice[] {
   const card: Choice = {
     value: "online",
-    title: options.applePay ? "信用卡／Apple Pay" : "信用卡",
+    title: onlineTitle(options),
     hint: method === "cvs" ? "先在藍新金流安全付款，取貨時不用再付錢" : "送出後前往藍新金流安全付款頁",
   };
   if (method === "cvs") {
     const list: Choice[] = [];
     if (options.cvs) list.push({ value: "cod", title: "超商取貨付款", hint: "到門市取貨時再付款" });
-    if (options.card) list.push(card);
+    if (onlineEnabled(options)) list.push(card);
     return list;
   }
   const list: Choice[] = [];
-  if (options.card) list.push(card);
+  if (onlineEnabled(options)) list.push(card);
   list.push({ value: "line", title: "LINE 確認付款", hint: "送出訂單後，由我們在 LINE 與您確認付款方式" });
   return list;
 }
@@ -45,13 +45,11 @@ export function CheckoutForm({
   identity,
   paymentNote,
   pickupPoints,
-  guest,
   options,
 }: {
   identity: { name: string } | null;
   paymentNote: string;
   pickupPoints: PickupPoint[];
-  guest: boolean;
   options: PaymentOptions;
 }) {
   const router = useRouter();
@@ -61,7 +59,7 @@ export function CheckoutForm({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [method, setMethod] = useState<Fulfillment>("delivery");
   const [pickupId, setPickupId] = useState(pickupPoints[0]?.id ?? "");
-  const [payment, setPayment] = useState<PaymentMethod>(options.card ? "online" : "line");
+  const [payment, setPayment] = useState<PaymentMethod>(onlineEnabled(options) ? "online" : "line");
   const pickupOn = pickupPoints.length > 0 && method === "pickup";
   const cvsOn = options.cvs && method === "cvs";
   const choices = paymentChoices(method, options);
@@ -83,10 +81,12 @@ export function CheckoutForm({
     const form = new FormData(event.currentTarget);
     const recipient = String(form.get("recipient") ?? "");
     const phone = String(form.get("phone") ?? "");
+    const email = String(form.get("email") ?? "");
     const address = String(form.get("address") ?? "");
     const nextErrors: Record<string, string> = {};
     if (!cleanPersonName(recipient)) nextErrors.recipient = "請填寫收件人姓名";
-    if (!normalizeTaiwanPhone(phone)) nextErrors.phone = "請填寫有效的台灣電話，例如 0912345678";
+    if (!normalizeTaiwanMobile(phone)) nextErrors.phone = "請填寫有效的台灣手機，例如 0912345678";
+    if (!cleanEmail(email)) nextErrors.email = "請填寫有效的 Email，以便寄送收據";
     if (!pickupOn && !cvsOn && address.trim().length < 6) nextErrors.address = "請填寫完整收件地址";
     if (pickupOn && !pickupId) nextErrors.pickup = "請選擇自取地點";
     setFieldErrors(nextErrors);
@@ -102,6 +102,7 @@ export function CheckoutForm({
           items: data.lines.map((line) => ({ productId: line.productId, variantId: line.variantId, qty: line.qty })),
           recipient,
           phone,
+          email,
           address: pickupOn || cvsOn ? "" : address,
           note: form.get("note"),
           fulfillment: pickupOn ? "pickup" : cvsOn ? "cvs" : "delivery",
@@ -110,7 +111,7 @@ export function CheckoutForm({
           idempotencyKey: idempotencyKey(),
         }),
       });
-      const json = (await res.json()) as { code?: string; pay?: boolean; error?: string };
+      const json = (await res.json()) as { code?: string; token?: string; pay?: boolean; error?: string };
       if (!res.ok || !json.code) {
         setError(json.error ?? "送出失敗，請稍後再試");
         await reload();
@@ -119,11 +120,12 @@ export function CheckoutForm({
       }
       sessionStorage.removeItem("radiant.checkout-key");
       clearCart();
+      const tokenQuery = json.token ? `?t=${encodeURIComponent(json.token)}` : "";
       if (json.pay) {
-        const failed = await startPayment(json.code);
+        const failed = await startPayment(json.code, json.token);
         if (!failed) return;
       }
-      router.push(`/order/${json.code}`);
+      router.push(`/order/${json.code}${tokenQuery}`);
     } catch {
       setError("網路連線異常，請再試一次。若已看到訂單成立，請勿重複送出。");
       setBusy(false);
@@ -151,16 +153,16 @@ export function CheckoutForm({
         {identity ? (
           <div className="identity">
             <div className="who">
-              <small>LINE 已登入</small>
+              <small>LINE 已登入（選用）</small>
               {identity.name || "LINE 使用者"}
             </div>
-            <a href="/api/line/logout?next=/checkout" className="link" style={{ fontSize: 13 }}>切換帳號</a>
+            <a href="/api/line/logout?next=/checkout" className="link" style={{ fontSize: 13 }}>改以訪客結帳</a>
           </div>
-        ) : guest ? (
+        ) : (
           <div className="notice" style={{ marginBottom: 20 }}>
-            此訂單會以收件姓名與電話建立，不會把您填寫的 LINE 名稱當成已驗證身分。店家若啟用 LINE 登入，之後結帳就會改以 LINE 辨識。
+            不需要登入。請留下姓名、手機與 Email。送出後請保存訂單連結，之後也能用這三項查詢訂單。
           </div>
-        ) : null}
+        )}
 
         {methods.length > 1 && (
           <div className="method-switch" role="radiogroup" aria-label="取貨方式">
@@ -187,6 +189,11 @@ export function CheckoutForm({
             {fieldErrors.phone && <span className="field-error">{fieldErrors.phone}</span>}
           </label>
         </div>
+        <label className="field">
+          <span className="label">電子郵件</span>
+          <input className="input" name="email" type="email" required maxLength={50} autoComplete="email" inputMode="email" placeholder="name@example.com" aria-invalid={Boolean(fieldErrors.email)} disabled={busy} />
+          {fieldErrors.email && <span className="field-error">{fieldErrors.email}</span>}
+        </label>
         {pickupOn ? (
           <div className="pickup-list">
             {pickupPoints.map((point) => (
@@ -219,7 +226,7 @@ export function CheckoutForm({
         </label>
         {pickupOn && selected && (
           <div className="notice" style={{ marginBottom: 20 }}>
-            自取不收運費。商品備妥後我們會透過 LINE 通知您前往「{selected.name}」取貨。
+            自取不收運費。商品備妥後請憑訂單編號與手機至「{selected.name}」取貨。
           </div>
         )}
         {choices.length > 1 && (

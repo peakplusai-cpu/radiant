@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getStore } from "@/lib/store";
 import { beginPayment } from "@/lib/orders";
-import { buildCheckoutPayload, newebpayConfig } from "@/lib/newebpay";
+import { PaymentRequestError, buildCheckoutPayload, newebpayConfig } from "@/lib/newebpay";
 import { canViewOrder } from "@/lib/order-access";
 import { clientIp, sameOrigin } from "@/lib/http";
 import { rateLimit } from "@/lib/rate-limit";
@@ -28,7 +28,8 @@ export async function POST(request: Request) {
   if (!started.ok) return NextResponse.json({ error: started.error }, { status: started.status });
   try {
     return NextResponse.json(buildCheckoutPayload(config, started.order, started.attempt), { headers: { "Cache-Control": "no-store" } });
-  } catch {
+  } catch (err) {
+    if (err instanceof PaymentRequestError) return NextResponse.json({ error: err.message }, { status: 400 });
     console.error("payment payload failed");
     return NextResponse.json({ error: "付款設定有誤，請聯絡店家" }, { status: 500 });
   }

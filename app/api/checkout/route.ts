@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { getStore } from "@/lib/store";
-import { getLineIdentity, lineLoginEnabled } from "@/lib/line";
+import { getLineIdentity } from "@/lib/line";
 import { placeOrder } from "@/lib/orders";
 import { parseCheckoutBody, resolveCheckoutIdentity } from "@/lib/checkout";
 import { clientIp, sameOrigin } from "@/lib/http";
@@ -26,21 +25,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "目前無法使用這個付款方式，請重新整理後再試" }, { status: 400 });
   }
 
-  const { settings } = await getStore();
   const session = await getLineIdentity();
   const identity = resolveCheckoutIdentity({
-    loginRequired: lineLoginEnabled(settings),
     session,
     recipient: parsed.data.recipient,
     phone: parsed.data.phone,
   });
-  if (!identity.ok) return NextResponse.json({ error: identity.error }, { status: identity.status });
 
   try {
     const result = await placeOrder({
       lines: parsed.data.items,
       recipient: parsed.data.recipient,
       phone: parsed.data.phone,
+      email: parsed.data.email,
       address: parsed.data.address,
       fulfillment: parsed.data.fulfillment,
       payment: parsed.data.payment,
@@ -51,7 +48,10 @@ export async function POST(request: Request) {
     });
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: 409 });
     await grantReceipt(result.order.code);
-    return NextResponse.json({ code: result.order.code, pay: result.order.paymentMethod !== "line" });
+    return NextResponse.json(
+      { code: result.order.code, token: result.order.token, pay: result.order.paymentMethod !== "line" },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   } catch {
     console.error("checkout failed");
     return NextResponse.json({ error: "系統忙碌，請稍後再試" }, { status: 500 });

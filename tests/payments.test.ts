@@ -16,6 +16,7 @@ const input = (patch: Partial<CheckoutInput> = {}): CheckoutInput => {
     lines: [{ productId: "prd_1", variantId: "var_m", qty: 1 }],
     recipient: "王小明",
     phone,
+    email: `guest${counter}@example.com`,
     address: "台北市中山區南京東路一段1號",
     fulfillment: "delivery",
     payment: "online",
@@ -34,7 +35,11 @@ const notice = (patch: Partial<PaymentNotice> & { code: string; amt: number }): 
   merchantOrderNo: `${patch.code}_1`,
   tradeNo: "T26111600001",
   paymentType: "CREDIT",
+  wallet: "",
   payTime: "2026-11-16 22:00:00",
+  bankCode: "",
+  codeNo: "",
+  expireDate: "",
   store: null,
   ...patch,
 });
@@ -309,5 +314,34 @@ describe("online payment and pay-at-pickup orders", () => {
     const saved = (await getStore()).orders.find((item) => item.code === order.code);
     expect(saved?.status).toBe("paid");
     expect(saved?.cvs).toMatchObject({ storeName: "松山", storeType: "7-ELEVEN" });
+  });
+
+  it("keeps an ATM number unpaid, extends the hold, and marks it paid only when PayTime arrives", async () => {
+    const { applyPaymentNotice, beginPayment } = await import("@/lib/orders");
+    const { getStore } = await import("@/lib/store");
+    const order = await place();
+    const numbered = await applyPaymentNotice(notice({
+      code: order.code,
+      amt: order.total,
+      paymentType: "VACC",
+      payTime: "",
+      bankCode: "004",
+      codeNo: "99887766",
+      expireDate: "2026-11-19",
+      tradeNo: "VACC1",
+    }));
+    expect(numbered.kind).toBe("voucher");
+    let saved = (await getStore()).orders.find((item) => item.code === order.code);
+    expect(saved).toMatchObject({ status: "pending", payCodeNo: "99887766", payBankCode: "004", paidAt: "" });
+    expect(Date.parse(saved?.holdUntil ?? "")).toBeGreaterThan(Date.now() + 24 * 3600_000);
+    expect((await applyPaymentNotice(notice({ code: order.code, amt: order.total, paymentType: "VACC", payTime: "", bankCode: "004", codeNo: "99887766", expireDate: "2026-11-19", tradeNo: "VACC1" }))).kind).toBe("duplicate");
+    expect((await beginPayment(order.code)).ok).toBe(false);
+
+    const paid = await applyPaymentNotice(notice({ code: order.code, amt: order.total, paymentType: "VACC", tradeNo: "VACC1" }));
+    expect(paid.kind).toBe("confirmed");
+    saved = (await getStore()).orders.find((item) => item.code === order.code);
+    expect(saved?.status).toBe("paid");
+    expect(saved?.holdUntil).toBe("");
+    expect(await stockOf("var_m")).toBe(19);
   });
 });

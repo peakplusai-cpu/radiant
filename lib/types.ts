@@ -84,6 +84,8 @@ export type Customer = {
   lineId: string;
   /** Last phone, used only to group unverified guest checkouts. */
   phone: string;
+  /** Last receipt email. Order lookup uses the email stored on the order. */
+  email: string;
   verified: boolean;
   note: string;
   createdAt: string;
@@ -97,6 +99,8 @@ export type Order = {
   customerId: string;
   recipient: string;
   phone: string;
+  /** Receipt email sent to NewebPay. Empty on orders placed before guest checkout. */
+  email: string;
   address: string;
   fulfillment: Fulfillment;
   pickupPointId: string;
@@ -104,9 +108,16 @@ export type Order = {
   paymentMethod: PaymentMethod;
   /** ISO time the card payment or COD store selection completed. Empty while unpaid. */
   paidAt: string;
-  /** NewebPay TradeNo of the successful payment or COD order. */
+  /** NewebPay TradeNo of the successful payment, voucher, or COD order. */
   payTradeNo: string;
+  /** NewebPay PaymentType or wallet (CREDIT, APPLEPAY, VACC, CVS, …). */
   payType: string;
+  /** ATM bank code after 取號. Empty until then. */
+  payBankCode: string;
+  /** ATM virtual account, CVS payment code, or barcode segments. */
+  payCodeNo: string;
+  /** NewebPay ExpireDate (yyyy-mm-dd) for an unpaid ATM/CVS number. */
+  payExpire: string;
   /** How many NewebPay payment pages were opened (each uses its own MerchantOrderNo). */
   payAttempts: number;
   /**
