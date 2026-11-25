@@ -4,6 +4,7 @@ import { safeEqual, sign } from "./session-token";
 import { LINE_COOKIE, LINE_STATE_COOKIE, clearedCookie, cookieFlags } from "./cookie-flags";
 import { cleanPersonName } from "./phone";
 import { publicSiteUrl } from "./site";
+import { parseNotifyTargets } from "./line-notify";
 import type { Settings } from "./types";
 
 const NINETY_DAYS = 90 * 24 * 60 * 60 * 1000;
@@ -104,18 +105,34 @@ export function safeNext(next: string | null | undefined): string {
   }
 }
 
-export async function pushLine(to: string, text: string): Promise<boolean> {
-  const { settings } = await getStore();
-  const { messagingToken } = lineConfig(settings);
-  if (!messagingToken || !to) return false;
+async function pushOne(token: string, to: string, text: string): Promise<boolean> {
   try {
     const res = await fetch("https://api.line.me/v2/bot/message/push", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${messagingToken}` },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ to, messages: [{ type: "text", text: text.slice(0, 4900) }] }),
+      signal: AbortSignal.timeout(4000),
     });
+    if (!res.ok) console.error("line push failed", res.status);
     return res.ok;
   } catch {
+    console.error("line push failed");
+    return false;
+  }
+}
+
+/** Pushes one text to every User / Group / Room ID in `to`. Never throws. */
+export async function pushLine(to: string, text: string): Promise<boolean> {
+  const targets = parseNotifyTargets(to);
+  if (!targets.length || !text.trim()) return false;
+  try {
+    const { settings } = await getStore();
+    const { messagingToken } = lineConfig(settings);
+    if (!messagingToken) return false;
+    const results = await Promise.all(targets.map((target) => pushOne(messagingToken, target, text)));
+    return results.some(Boolean);
+  } catch {
+    console.error("line push failed");
     return false;
   }
 }

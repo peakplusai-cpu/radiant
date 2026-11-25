@@ -1,7 +1,7 @@
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { CheckoutForm } from "@/components/CheckoutForm";
-import { getStore } from "@/lib/store";
+import { readSettledStore } from "@/lib/orders";
 import { getLineIdentity, lineLoginEnabled } from "@/lib/line";
 import { enabledPickupPoints } from "@/lib/pickup";
 import { paymentOptions } from "@/lib/newebpay";
@@ -18,7 +18,7 @@ const LINE_ERRORS: Record<string, string> = {
 
 export default async function CheckoutPage({ searchParams }: { searchParams: Promise<{ line?: string }> }) {
   const { line } = await searchParams;
-  const { settings } = await getStore();
+  const { settings } = await readSettledStore();
   const identity = await getLineIdentity();
   const loginOn = lineLoginEnabled(settings);
   const options = paymentOptions();

@@ -10,14 +10,26 @@ let pointN = 0;
 const nextPointKey = () => `pk${++pointN}`;
 
 type Props = {
-  settings: Omit<Settings, "secret" | "loginChannelSecret" | "messagingToken">;
+  settings: Omit<Settings, "secret" | "loginChannelSecret" | "messagingToken" | "messagingChannelSecret">;
   hasLoginSecret: boolean;
   hasMessagingToken: boolean;
+  hasMessagingSecret: boolean;
   callbackUrl: string;
+  webhookUrl: string;
   loginReady: boolean;
+  missingBusiness: string[];
 };
 
-export function SettingsForm({ settings, hasLoginSecret, hasMessagingToken, callbackUrl, loginReady }: Props) {
+export function SettingsForm({
+  settings,
+  hasLoginSecret,
+  hasMessagingToken,
+  hasMessagingSecret,
+  callbackUrl,
+  webhookUrl,
+  loginReady,
+  missingBusiness,
+}: Props) {
   const [message, action, pending] = useActionState(saveSettings, "");
   const [testMessage, testAction, testing] = useActionState(testPush, "");
   const [points, setPoints] = useState<PointDraft[]>(() =>
@@ -38,6 +50,11 @@ export function SettingsForm({ settings, hasLoginSecret, hasMessagingToken, call
             points.map((p) => ({ id: p.id, name: p.name, address: p.address, hours: p.hours, note: p.note, enabled: p.enabled }))
           )}
         />
+        {missingBusiness.length > 0 && (
+          <div className="notice error" style={{ marginBottom: 22 }} role="status">
+            上線前請填寫經營者資訊：{missingBusiness.join("、")}。空白欄位不會顯示在頁尾與法規頁面，但正式營業前必須填寫。
+          </div>
+        )}
         <div className="form-grid">
           <div>
             <section className="panel">
@@ -64,7 +81,7 @@ export function SettingsForm({ settings, hasLoginSecret, hasMessagingToken, call
               <h2>
                 LINE 登入（結帳辨識身分）
                 <small>
-                  狀態：<b style={{ color: loginReady ? "var(--teal-deep)" : "var(--alert)" }}>{loginReady ? "已啟用，結帳需 LINE 登入" : "未設定，結帳時由客戶自行填寫"}</b>
+                  狀態：<b style={{ color: loginReady ? "var(--teal-deep)" : "var(--alert)" }}>{loginReady ? "已啟用。結帳不必登入；登入只用於查看以此 LINE 下過的訂單" : "未設定。結帳以訪客身分填寫資料即可"}</b>
                 </small>
               </h2>
               <label className="field">
@@ -89,12 +106,26 @@ export function SettingsForm({ settings, hasLoginSecret, hasMessagingToken, call
 
             <section className="panel">
               <h2>
-                LINE 推播通知
-                <small>新訂單時通知店家，並回覆客戶訂單確認（客戶需已加入官方帳號好友）。</small>
+                LINE 訂單通知
+                <small>新訂單、付款完成，以及付款失敗或逾時取消時通知店家。失敗不會影響結帳或藍新入帳。</small>
               </h2>
+              <div className="notice" style={{ marginBottom: 22 }}>
+                <p style={{ margin: "0 0 8px" }}>設定步驟：</p>
+                <ol style={{ margin: 0, paddingLeft: 18, lineHeight: 1.7 }}>
+                  <li>在 LINE Developers 的 Messaging API channel 發行 Channel access token（長期），貼到下方。已儲存的權杖不會再顯示。</li>
+                  <li>同一組 channel 的 Channel secret 也貼到下方，用來驗證 Webhook 簽章。已儲存的 secret 不會再顯示。</li>
+                  <li>
+                    把 Webhook URL 設成下方網址並啟用 Use webhook：
+                    <div className="mono" style={{ marginTop: 8 }}>{webhookUrl}</div>
+                  </li>
+                  <li>把官方帳號加為好友，或邀請進員工群組，傳送「綁定通知」。回到本頁下方核准通知對象。也可以手動貼上 User ID（U…）、Group ID（C…）或 Room ID（R…），多個用逗號或換行分隔。</li>
+                  <li>按「發送 LINE 測試訊息」確認收得到。</li>
+                </ol>
+              </div>
               <label className="field">
-                <span className="label">Messaging API channel access token</span>
-                <input className="input" name="messagingToken" type="password" autoComplete="off" placeholder={hasMessagingToken ? "已設定，留白表示不變更" : ""} maxLength={400} />
+                <span className="label">Channel access token</span>
+                <input className="input" name="messagingToken" type="password" autoComplete="new-password" placeholder={hasMessagingToken ? "已設定，留白表示不變更" : ""} maxLength={400} />
+                <span className="hint">只存在伺服器。此頁不會把已儲存的權杖送回瀏覽器。</span>
                 {hasMessagingToken && (
                   <label className="toggle" style={{ marginTop: 12, marginBottom: 0, fontSize: 13 }}>
                     <input type="checkbox" name="clearMessagingToken" />
@@ -103,9 +134,20 @@ export function SettingsForm({ settings, hasLoginSecret, hasMessagingToken, call
                 )}
               </label>
               <label className="field">
-                <span className="label">店家通知對象（User ID 或 Group ID）</span>
-                <input className="input" name="notifyTo" defaultValue={settings.notifyTo} placeholder="Uxxxxxxxx…" maxLength={80} />
-                <span className="hint">店家員工的 LINE User ID（需已加好友）。留白則不通知店家。</span>
+                <span className="label">Channel secret</span>
+                <input className="input" name="messagingChannelSecret" type="password" autoComplete="new-password" placeholder={hasMessagingSecret ? "已設定，留白表示不變更" : ""} maxLength={200} />
+                <span className="hint">用於驗證 Webhook 的 X-Line-Signature。也可以改放環境變數 LINE_MESSAGING_CHANNEL_SECRET。</span>
+                {hasMessagingSecret && (
+                  <label className="toggle" style={{ marginTop: 12, marginBottom: 0, fontSize: 13 }}>
+                    <input type="checkbox" name="clearMessagingSecret" />
+                    <span>清除已儲存的 Channel secret</span>
+                  </label>
+                )}
+              </label>
+              <label className="field">
+                <span className="label">店家通知對象（可多個）</span>
+                <textarea className="textarea" name="notifyTo" defaultValue={settings.notifyTo} placeholder={"Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nCxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"} maxLength={2000} />
+                <span className="hint">User ID、Group ID 或 Room ID，以逗號或換行分隔，最多 20 個。留白則不通知店家。</span>
               </label>
             </section>
           </div>
@@ -116,6 +158,31 @@ export function SettingsForm({ settings, hasLoginSecret, hasMessagingToken, call
               <label className="field">
                 <span className="label">商店名稱</span>
                 <input className="input" name="shopName" defaultValue={settings.shopName} maxLength={40} />
+              </label>
+              <label className="field">
+                <span className="label">經營者名稱</span>
+                <input className="input" name="businessName" defaultValue={settings.businessName} maxLength={80} autoComplete="organization" />
+              </label>
+              <label className="field">
+                <span className="label">統一編號</span>
+                <input className="input" name="taxId" defaultValue={settings.taxId} maxLength={8} inputMode="numeric" />
+              </label>
+              <label className="field">
+                <span className="label">地址</span>
+                <input className="input" name="address" defaultValue={settings.address} maxLength={200} autoComplete="street-address" />
+              </label>
+              <label className="field">
+                <span className="label">電話</span>
+                <input className="input" name="phone" defaultValue={settings.phone} maxLength={40} autoComplete="tel" />
+              </label>
+              <label className="field">
+                <span className="label">Email</span>
+                <input className="input" name="email" defaultValue={settings.email} maxLength={80} autoComplete="email" />
+              </label>
+              <label className="field">
+                <span className="label">退貨地址</span>
+                <input className="input" name="returnAddress" defaultValue={settings.returnAddress} maxLength={200} />
+                <span className="hint">顯示在頁尾、隱私權政策、服務條款與退換貨政策。沒填的欄位不會出現。</span>
               </label>
               <label className="field">
                 <span className="label">首頁文案</span>
@@ -150,7 +217,7 @@ export function SettingsForm({ settings, hasLoginSecret, hasMessagingToken, call
               <label className="field">
                 <span className="label">付款說明</span>
                 <textarea className="textarea" name="paymentNote" defaultValue={settings.paymentNote} maxLength={600} />
-                <span className="hint">只在客戶選「LINE 確認付款」時顯示，例如匯款帳號或收款方式。信用卡／Apple Pay、超商取貨付款不會用到。</span>
+                <span className="hint">只在客戶改選「由我們確認付款」時顯示。藍新金流訂單會顯示固定的付款說明，不受這段文字影響。</span>
               </label>
             </section>
 

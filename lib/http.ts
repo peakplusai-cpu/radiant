@@ -1,13 +1,16 @@
+import { supabaseStorageHost } from "./supabase-host";
+
 export function contentSecurityPolicy(dev: boolean): string {
+  const storage = `https://${supabaseStorageHost()}`;
   const script = dev ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'" : "script-src 'self' 'unsafe-inline'";
   const connect = dev
-    ? "connect-src 'self' ws: wss: https://*.supabase.co https://api.line.me https://access.line.me"
-    : "connect-src 'self' https://*.supabase.co https://api.line.me https://access.line.me";
+    ? `connect-src 'self' ws: wss: ${storage} https://api.line.me https://access.line.me`
+    : `connect-src 'self' ${storage} https://api.line.me https://access.line.me`;
   return [
     "default-src 'self'",
     script,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https://*.supabase.co",
+    `img-src 'self' data: blob: ${storage}`,
     "font-src 'self'",
     connect,
     "frame-ancestors 'none'",

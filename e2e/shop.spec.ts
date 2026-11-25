@@ -237,6 +237,49 @@ test("admin promotion reaches the storefront and an expired one is rejected", as
   await expect(page.locator(".promo-banner")).toHaveCount(0);
 });
 
+test("legal pages describe guest checkout and NewebPay without the draft banner", async ({ page }) => {
+  for (const path of ["/privacy", "/terms", "/returns"]) {
+    await page.goto(path);
+    await expect(page.getByText("供店主審閱")).toHaveCount(0);
+    await expect(page.getByText("本店不在網站上刷卡")).toHaveCount(0);
+    await expect(page.getByText("結帳與查詢訂單都需要登入")).toHaveCount(0);
+    await expect(page.getByText("藍新金流").first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "經營者資訊" })).toHaveCount(0);
+  }
+  await page.goto("/privacy");
+  await expect(page.getByRole("heading", { name: "您的權利" })).toBeVisible();
+  await expect(page.getByText("個人資料保護法")).toBeVisible();
+  await page.goto("/terms");
+  await expect(page.getByText("結帳不需要登入")).toBeVisible();
+  await expect(page.getByText("30 分鐘內完成付款")).toBeVisible();
+  await expect(page.getByText("宅配運費為新台幣 70 元")).toBeVisible();
+  await page.goto("/returns");
+  await expect(page.getByRole("heading", { name: "七天鑑賞期" })).toBeVisible();
+  await expect(page.getByText("當初的付款方式")).toBeVisible();
+  const home = await page.goto("/");
+  expect(home?.ok()).toBeTruthy();
+  expect(await page.content()).not.toContain("TOKENPROBE9f3a");
+  expect(await page.content()).not.toContain("SECRETPROBE9f3a");
+});
+
+test("admin settings explains LINE alerts and does not reveal stored secrets", async ({ page }) => {
+  await page.goto("/admin/login");
+  await page.getByLabel("密碼").fill("e2e-password");
+  await page.getByRole("button", { name: "登入" }).click();
+  await expect(page).toHaveURL(/\/admin$/);
+  await page.goto("/admin/settings");
+  await expect(page.getByRole("heading", { name: "設定" })).toBeVisible();
+  await expect(page.getByText("上線前請填寫經營者資訊")).toBeVisible();
+  await expect(page.getByText("https://radiant-indol.vercel.app/api/line/webhook")).toBeVisible();
+  await expect(page.getByRole("button", { name: "發送 LINE 測試訊息" })).toBeVisible();
+  await expect(page.locator('input[name="messagingToken"]')).toHaveValue("");
+  await expect(page.locator('input[name="messagingChannelSecret"]')).toHaveValue("");
+  await expect(page.locator('input[name="loginChannelSecret"]')).toHaveValue("");
+  const html = await page.content();
+  expect(html).not.toContain("TOKENPROBE9f3a");
+  expect(html).not.toContain("SECRETPROBE9f3a");
+});
+
 test("pay start refuses cross-site requests and unknown orders", async ({ request, baseURL }) => {
   const noOrigin = await request.post("/api/pay/start", { data: { code: "RDPAYTEST", token: "paytok" } });
   expect(noOrigin.status()).toBe(403);

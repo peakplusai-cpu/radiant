@@ -1,6 +1,7 @@
 import { cookies, headers } from "next/headers";
 import { randomBytes } from "crypto";
 import { redirect } from "next/navigation";
+import { readSettledStore } from "./orders";
 import { getStore } from "./store";
 import { ADMIN_COOKIE, ADMIN_SESSION_MS, clearedCookie, cookieFlags } from "./cookie-flags";
 import { sameOrigin } from "./http";
@@ -46,5 +47,5 @@ export async function assertActionOrigin(): Promise<void> {
 
 export async function getAdminStore() {
   await requireAdmin();
-  return getStore();
+  return readSettledStore();
 }

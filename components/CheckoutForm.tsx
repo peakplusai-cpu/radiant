@@ -8,6 +8,7 @@ import { clearCart } from "@/lib/cart-client";
 import { cleanEmail, cleanPersonName, normalizeTaiwanMobile } from "@/lib/phone";
 import { readGuestToken } from "@/lib/promo-client";
 import { startPayment } from "@/lib/pay-client";
+import { DEFAULT_PAYMENT_NOTE, LEGACY_PAYMENT_NOTE, ONLINE_PAYMENT_NOTE } from "@/lib/business";
 import { CVS_MAX_TOTAL, CVS_MIN_TOTAL, onlineEnabled, onlineTitle, type PaymentOptions } from "@/lib/payment";
 import type { Fulfillment, PaymentMethod, PickupPoint } from "@/lib/types";
 import { variantLabel } from "@/lib/variants";
@@ -38,7 +39,7 @@ function paymentChoices(method: Fulfillment, options: PaymentOptions): Choice[] 
   }
   const list: Choice[] = [];
   if (onlineEnabled(options)) list.push(card);
-  list.push({ value: "line", title: "LINE 確認付款", hint: "送出訂單後，由我們在 LINE 與您確認付款方式" });
+  list.push({ value: "line", title: "由我們確認付款", hint: "不使用藍新金流時，送出後由我們透過 LINE 與您聯絡。信用卡與 Apple Pay 請改選線上付款。" });
   return list;
 }
 
@@ -257,7 +258,10 @@ export function CheckoutForm({
             超商取貨訂單金額須在 NT$ {CVS_MIN_TOTAL}–{CVS_MAX_TOTAL.toLocaleString("en-US")} 之間。
           </p>
         )}
-        {chosen?.value === "line" && paymentNote && <div className="notice">{paymentNote}</div>}
+        {chosen?.value === "online" && <div className="notice">{ONLINE_PAYMENT_NOTE}</div>}
+        {chosen?.value === "line" && paymentNote && paymentNote !== LEGACY_PAYMENT_NOTE && paymentNote !== DEFAULT_PAYMENT_NOTE && (
+          <div className="notice">{paymentNote}</div>
+        )}
       </div>
 
       <aside className="summary">

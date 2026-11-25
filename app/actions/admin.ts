@@ -9,6 +9,8 @@ import { getStore, mutate, StorageError } from "@/lib/store";
 import { uid } from "@/lib/id";
 import { changeOrder } from "@/lib/orders";
 import { pushLine } from "@/lib/line";
+import { isLineTarget, parseNotifyTargets } from "@/lib/line-notify";
+import { cleanBusinessText } from "@/lib/business";
 import { OPEN_STATUSES, ORDER_STATUSES } from "@/lib/format";
 import { sanitizePickupPoints } from "@/lib/pickup";
 import { sanitizeWall } from "@/lib/wall";
@@ -278,18 +280,27 @@ export async function saveSettings(_prev: string, form: FormData): Promise<strin
     settings.cvsShippingFee = Math.max(0, Math.round(num(str(form, "cvsShippingFee", 10))));
     settings.freeShippingThreshold = Math.max(0, Math.round(num(str(form, "freeShippingThreshold", 10))));
     settings.paymentNote = str(form, "paymentNote", 600);
+    settings.businessName = cleanBusinessText(str(form, "businessName", 80), 80);
+    settings.taxId = cleanBusinessText(str(form, "taxId", 20), 20).replace(/\D/g, "").slice(0, 8);
+    settings.address = cleanBusinessText(str(form, "address", 200), 200);
+    settings.phone = cleanBusinessText(str(form, "phone", 40), 40);
+    settings.email = cleanBusinessText(str(form, "email", 80), 80);
+    settings.returnAddress = cleanBusinessText(str(form, "returnAddress", 200), 200);
     settings.lineOaName = str(form, "lineOaName", 60);
     settings.lineOaBasicId = str(form, "lineOaBasicId", 60);
     const lineUrl = str(form, "lineOaUrl", 200);
     settings.lineOaUrl = /^https:\/\//i.test(lineUrl) ? lineUrl : "";
-    settings.notifyTo = str(form, "notifyTo", 80);
+    settings.notifyTo = str(form, "notifyTo", 2000);
     settings.loginChannelId = str(form, "loginChannelId", 40);
     const secret = str(form, "loginChannelSecret", 80);
     if (secret) settings.loginChannelSecret = secret;
     const token = str(form, "messagingToken", 400);
     if (token) settings.messagingToken = token;
+    const channelSecret = str(form, "messagingChannelSecret", 200);
+    if (channelSecret) settings.messagingChannelSecret = channelSecret;
     if (form.get("clearLoginSecret") === "on") settings.loginChannelSecret = "";
     if (form.get("clearMessagingToken") === "on") settings.messagingToken = "";
+    if (form.get("clearMessagingSecret") === "on") settings.messagingChannelSecret = "";
     settings.pickupPoints = sanitizePickupPoints(pickupPoints);
   });
   revalidatePath("/", "layout");
@@ -320,9 +331,34 @@ export async function saveWall(_prev: string, form: FormData): Promise<string> {
 export async function testPush(_prev: string): Promise<string> {
   await guard();
   const { settings } = await getStore();
-  if (!settings.notifyTo) return "請先填入「店家通知對象」並儲存";
+  const targets = parseNotifyTargets(settings.notifyTo);
+  if (!targets.length) return "請先填入有效的 User ID 或 Group ID（U、C 或 R 開頭）並儲存";
   const ok = await pushLine(settings.notifyTo, "Radiant 測試訊息：LINE 官方帳號已成功連接。");
-  return ok ? "已送出測試訊息，請到 LINE 查看" : "推播失敗，請確認 Messaging API 權杖與通知對象 ID";
+  return ok ? `已送出測試訊息給 ${targets.length} 個通知對象，請到 LINE 查看` : "推播失敗，請確認 Channel access token 與通知對象 ID";
+}
+
+export async function approveNotifyTarget(form: FormData): Promise<void> {
+  await guard();
+  const id = str(form, "id", 40);
+  if (!isLineTarget(id)) return;
+  await mutate((store) => {
+    const targets = parseNotifyTargets(store.settings.notifyTo);
+    if (!targets.includes(id) && targets.length < 20) targets.push(id);
+    if (!targets.includes(id)) return;
+    store.settings.notifyTo = targets.join("\n");
+    store.settings.pendingNotifies = (store.settings.pendingNotifies ?? []).filter((item) => item.id !== id);
+  });
+  revalidatePath("/admin/settings");
+}
+
+export async function dismissNotifyTarget(form: FormData): Promise<void> {
+  await guard();
+  const id = str(form, "id", 40);
+  if (!isLineTarget(id)) return;
+  await mutate((store) => {
+    store.settings.pendingNotifies = (store.settings.pendingNotifies ?? []).filter((item) => item.id !== id);
+  });
+  revalidatePath("/admin/settings");
 }
 
 export async function savePromotion(_prev: string, form: FormData): Promise<string> {

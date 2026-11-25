@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getStore } from "@/lib/store";
+import { readSettledStore } from "@/lib/orders";
 import { cleanEmail, normalizeTaiwanMobile } from "@/lib/phone";
 import { safeEqual } from "@/lib/session-token";
 import { clientIp, sameOrigin } from "@/lib/http";
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "查詢太頻繁，請稍後再試" }, { status: 429, headers: { "Retry-After": String(codeLimit.retryAfter) } });
   }
 
-  const { orders } = await getStore();
+  const { orders } = await readSettledStore();
   const order = orders.find((item) => item.code === code);
   const phoneOk = safeEqual(order?.phone ?? "", phone);
   const emailOk = safeEqual((order?.email ?? "").toLowerCase(), email);

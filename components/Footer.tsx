@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getCatalogStore } from "@/lib/store";
+import { businessLines } from "@/lib/business";
 import { officialLineHref } from "@/lib/line-link";
 import { LineButton } from "./LineButton";
 
@@ -7,6 +8,7 @@ export async function Footer() {
   const { settings } = await getCatalogStore();
   const lineHref = officialLineHref(settings);
   const oaLabel = settings.lineOaName || "LINE 官方帳號";
+  const business = businessLines(settings);
   return (
     <>
     <footer className="footer">
@@ -50,6 +52,18 @@ export async function Footer() {
           </ul>
         </div>
       </div>
+      {business.length > 0 && (
+        <div className="footer-business">
+          <h4>經營者資訊</h4>
+          <ul>
+            {business.map((line) => (
+              <li key={line.label}>
+                {line.label}：{line.value}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="footer-base">
         <span>© {new Date().getFullYear()} {settings.shopName}</span>
       </div>

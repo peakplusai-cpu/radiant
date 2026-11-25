@@ -8,6 +8,9 @@ import { sanitizeWall } from "./wall";
 import { migrateProduct } from "./variants";
 import { DEFAULT_CVS_FEE, DEFAULT_FREE_SHIPPING, DEFAULT_SHIPPING_FEE } from "./pricing";
 import { normalizeApplied, normalizePromotion } from "./promos";
+import { cleanBusinessText, LEGACY_PAYMENT_NOTE, DEFAULT_PAYMENT_NOTE } from "./business";
+import { sanitizePendingNotifies } from "./line-notify";
+import { holdExpired } from "./payment";
 
 if (typeof window !== "undefined") {
   throw new Error("lib/store.ts is server-only");
@@ -29,14 +32,22 @@ function defaultSettings(): Settings {
     shippingFee: DEFAULT_SHIPPING_FEE,
     cvsShippingFee: DEFAULT_CVS_FEE,
     freeShippingThreshold: DEFAULT_FREE_SHIPPING,
-    paymentNote: "送出訂單後，我們會透過 LINE 與您確認並提供付款方式。",
+    paymentNote: DEFAULT_PAYMENT_NOTE,
     lineOaName: "",
     lineOaBasicId: "",
     lineOaUrl: "",
     loginChannelId: "",
     loginChannelSecret: "",
     messagingToken: "",
+    messagingChannelSecret: "",
     notifyTo: "",
+    pendingNotifies: [],
+    businessName: "",
+    taxId: "",
+    address: "",
+    phone: "",
+    email: "",
+    returnAddress: "",
     pickupPoints: [],
   };
 }
@@ -77,6 +88,7 @@ function normalizeOrder(order: Partial<Order>): Order {
     payCodeNo: typeof order.payCodeNo === "string" ? order.payCodeNo : "",
     payExpire: typeof order.payExpire === "string" ? order.payExpire : "",
     payAttempts: Number.isFinite(order.payAttempts) ? Math.max(0, Math.floor(order.payAttempts as number)) : 0,
+    alerts: Array.isArray(order.alerts) ? order.alerts.filter((item): item is string => typeof item === "string").slice(-20) : [],
     holdUntil: typeof order.holdUntil === "string" ? order.holdUntil : "",
     cvs: normalizeCvs(order.cvs),
     pickupPointId: typeof order.pickupPointId === "string" ? order.pickupPointId : "",
@@ -127,8 +139,17 @@ function normalize(parsed: Partial<Store>): Store {
     ...defaults,
     ...(parsed.settings ?? {}),
     pickupPoints: sanitizePickupPoints(parsed.settings?.pickupPoints),
+    pendingNotifies: sanitizePendingNotifies(parsed.settings?.pendingNotifies),
+    businessName: cleanBusinessText(parsed.settings?.businessName, 80),
+    taxId: cleanBusinessText(parsed.settings?.taxId, 8).replace(/\D/g, "").slice(0, 8),
+    address: cleanBusinessText(parsed.settings?.address, 200),
+    phone: cleanBusinessText(parsed.settings?.phone, 40),
+    email: cleanBusinessText(parsed.settings?.email, 80),
+    returnAddress: cleanBusinessText(parsed.settings?.returnAddress, 200),
+    messagingChannelSecret: typeof parsed.settings?.messagingChannelSecret === "string" ? parsed.settings.messagingChannelSecret.trim().slice(0, 200) : "",
   };
   if (!settings.secret) settings.secret = defaults.secret;
+  if (!settings.paymentNote.trim() || settings.paymentNote.trim() === LEGACY_PAYMENT_NOTE) settings.paymentNote = DEFAULT_PAYMENT_NOTE;
   if (!Number.isFinite(settings.cvsShippingFee) || settings.cvsShippingFee < 0) settings.cvsShippingFee = defaults.cvsShippingFee;
   return {
     admin: parsed.admin ?? null,
@@ -264,13 +285,20 @@ export async function getStore(): Promise<Store> {
 }
 
 /** Public catalog. Cached for two minutes; admin saves and new orders clear the tag. */
+async function settleCatalog(store: Store): Promise<Store> {
+  if (isBuildPhase() || !store.orders.some((order) => holdExpired(order))) return store;
+  const { releaseExpiredHolds } = await import("./orders");
+  await releaseExpiredHolds();
+  return getStore();
+}
+
 export async function getCatalogStore(): Promise<Store> {
   if (!supabaseConfigured()) {
     if (isBuildPhase()) return normalize({});
-    return readFile();
+    return settleCatalog(readFile());
   }
   try {
-    return await readSupabaseCached();
+    return await settleCatalog(await readSupabaseCached());
   } catch (err) {
     if (isBuildPhase()) return normalize({});
     throw err;

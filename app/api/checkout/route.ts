@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getLineIdentity } from "@/lib/line";
-import { placeOrder } from "@/lib/orders";
+import { placeOrder, releaseExpiredHolds } from "@/lib/orders";
 import { parseCheckoutBody, resolveCheckoutIdentity } from "@/lib/checkout";
 import { clientIp, sameOrigin } from "@/lib/http";
 import { rateLimit } from "@/lib/rate-limit";
@@ -31,6 +31,7 @@ export async function POST(request: Request) {
     }
   }
 
+  await releaseExpiredHolds();
   const session = await getLineIdentity();
   const identity = resolveCheckoutIdentity({
     session,
