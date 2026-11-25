@@ -2,7 +2,7 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { OrderReceipt } from "@/components/OrderReceipt";
 import { OrderLookup } from "@/components/OrderLookup";
-import { getStore } from "@/lib/store";
+import { readSettledStore } from "@/lib/orders";
 import { getLineIdentity, lineLoginEnabled } from "@/lib/line";
 import { formatPrice } from "@/lib/format";
 
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "我的訂單" };
 
 export default async function OrdersPage() {
-  const { orders, customers, settings } = await getStore();
+  const { orders, customers, settings } = await readSettledStore();
   const identity = await getLineIdentity();
   const customer = identity ? customers.find((c) => c.lineUserId === identity.userId) : undefined;
   const mine = customer

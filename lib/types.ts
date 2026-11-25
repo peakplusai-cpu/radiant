@@ -188,6 +188,8 @@ export type Order = {
   payExpire: string;
   /** How many NewebPay payment pages were opened (each uses its own MerchantOrderNo). */
   payAttempts: number;
+  /** Staff alerts already sent for this order, so a retried notice does not push again. */
+  alerts: string[];
   /**
    * Stock is held until this time while the customer has not finished paying
    * or choosing a store on NewebPay. Empty once the order is confirmed.
@@ -214,6 +216,13 @@ export type WallPhoto = {
   productId: string;
 };
 
+/** A LINE user, group, or room waiting for the shop to approve order alerts. */
+export type PendingNotify = {
+  id: string;
+  kind: "user" | "group" | "room";
+  at: string;
+};
+
 export type Settings = {
   secret: string;
   shopName: string;
@@ -230,7 +239,23 @@ export type Settings = {
   loginChannelId: string;
   loginChannelSecret: string;
   messagingToken: string;
+  /** Messaging API channel secret. Verifies webhooks. Never send this to the browser. */
+  messagingChannelSecret: string;
   notifyTo: string;
+  /** IDs captured from「綁定通知」that staff have not approved yet. */
+  pendingNotifies: PendingNotify[];
+  /** 經營者名稱. Empty until the shop fills it in. Never invent a value. */
+  businessName: string;
+  /** 統一編號. Empty until the shop fills it in. */
+  taxId: string;
+  /** 營業地址. Empty until the shop fills it in. */
+  address: string;
+  /** 聯絡電話. Empty until the shop fills it in. */
+  phone: string;
+  /** 聯絡 Email. Empty until the shop fills it in. */
+  email: string;
+  /** 退貨地址. Empty until the shop fills it in. */
+  returnAddress: string;
   pickupPoints: PickupPoint[];
 };
 

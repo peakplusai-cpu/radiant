@@ -6,10 +6,11 @@ import { formatPrice } from "./format";
 import { effectiveCategories } from "./categories";
 import { customerUses, quoteCart, reinstatePromoUses, restorePromoUses, validGuestToken, type CustomerKeys } from "./promos";
 import { pushLine } from "./line";
+import { newOrderHeadline, staffOrderMessage } from "./line-notify";
 import { enabledPickupPoints, formatPickupAddress } from "./pickup";
 import { canTransition } from "./order-flow";
 import { variantLabel } from "./variants";
-import { CVS_MAX_TOTAL, CVS_MIN_TOTAL, HOLD_MINUTES, MAX_HOLD_MINUTES, awaitingCustomer, holdExpired, paymentAllowed, paymentLabel } from "./payment";
+import { CVS_MAX_TOTAL, CVS_MIN_TOTAL, HOLD_MINUTES, MAX_HOLD_MINUTES, awaitingCustomer, holdExpired, paymentAllowed } from "./payment";
 import { isVoucherNotice, noticePayType, voucherDeadline, type PaymentNotice } from "./newebpay";
 import type { CheckoutIdentity } from "./checkout";
 import type { Customer, Fulfillment, Order, OrderItem, OrderStatus, PaymentMethod, Store } from "./types";
@@ -129,8 +130,72 @@ export function expireHolds(store: Store, now = Date.now()): number {
   return count;
 }
 
+async function notifyReleased(orders: Order[]): Promise<void> {
+  if (!orders.length) return;
+  const { settings } = await getStore();
+  const shown = orders.slice(0, 20);
+  const extra = orders.length - shown.length;
+  const text =
+    shown.map((order) => staffOrderMessage("逾時未付款，已自動取消並歸還庫存", order)).join("\n\n") +
+    (extra > 0 ? `\n\n另有 ${extra} 筆逾時訂單已取消` : "");
+  await pushLine(settings.notifyTo, text);
+}
+
+/**
+ * Runs `fn` inside the version lock after releasing overdue holds.
+ * A retried write only notifies for orders the successful attempt actually cancelled.
+ */
+async function mutateSettled<T>(fn: (store: Store) => T): Promise<{ value: T; released: number }> {
+  let released = 0;
+  let pendingNotice: Order[] = [];
+  const value = await mutate((store) => {
+    const dueIds = new Set(store.orders.filter((order) => holdExpired(order)).map((order) => order.id));
+    if (dueIds.size) expireHolds(store);
+    const result = fn(store);
+    released = dueIds.size;
+    pendingNotice = store.orders
+      .filter((order) => dueIds.has(order.id) && order.status === "cancelled" && !order.paidAt)
+      .map((order) => ({ ...order, items: order.items.map((item) => ({ ...item })), cvs: order.cvs ? { ...order.cvs } : null, alerts: [...(order.alerts ?? [])] }));
+    return result;
+  });
+  try {
+    await notifyReleased(pendingNotice);
+  } catch {
+    console.error("line notify failed");
+  }
+  return { value, released };
+}
+
+let releaseInflight: Promise<number> | null = null;
+
+/** Cancels overdue unpaid orders once. Concurrent callers share one write. */
+export function releaseExpiredHolds(): Promise<number> {
+  if (!releaseInflight) {
+    releaseInflight = releaseExpiredHoldsNow().finally(() => {
+      releaseInflight = null;
+    });
+  }
+  return releaseInflight;
+}
+
+async function releaseExpiredHoldsNow(): Promise<number> {
+  const store = await getStore();
+  if (!store.orders.some((order) => holdExpired(order))) return 0;
+  const { released } = await mutateSettled(() => undefined);
+  return released;
+}
+
+/** Store read for cart, checkout, lookup, and admin. Releases overdue holds first. */
+export async function readSettledStore(): Promise<Store> {
+  const store = await getStore();
+  if (!store.orders.some((order) => holdExpired(order))) return store;
+  await releaseExpiredHolds();
+  return getStore();
+}
+
 export async function expireUnpaidOrders(): Promise<number> {
-  return mutate((store) => expireHolds(store));
+  const { released } = await mutateSettled(() => undefined);
+  return released;
 }
 
 function commitPromoUses(store: Store, orderId: string, applied: { id: string; name: string; discount: number }[], who: CustomerKeys): void {
@@ -171,8 +236,7 @@ export async function placeOrder(
   try {
     const payment: PaymentMethod = input.payment ?? "line";
     if (!paymentAllowed(input.fulfillment, payment)) return { ok: false, error: "這個取貨方式不能使用所選的付款方式" };
-    const result = await mutate((store) => {
-      expireHolds(store);
+    const { value: result } = await mutateSettled((store) => {
       const hit = store.idempotency.find((item) => item.key === input.idempotencyKey);
       if (hit) {
         const existing = store.orders.find((order) => order.code === hit.code);
@@ -287,6 +351,7 @@ export async function placeOrder(
         payCodeNo: "",
         payExpire: "",
         payAttempts: 0,
+        alerts: [],
         holdUntil: payment === "line" ? "" : new Date(Date.now() + HOLD_MINUTES * 60_000).toISOString(),
         cvs: null,
         note: input.note,
@@ -307,22 +372,23 @@ export async function placeOrder(
       return { order, customer, priorOrders, notifyTo: store.settings.notifyTo, replay: false };
     });
 
-    if (!result.replay && result.order.paymentMethod === "line") {
-      const lines = result.order.items.map((item) => `· ${item.name} ${variantLabel(item.color, item.size)} × ${item.qty}`).join("\n");
-      const how = result.order.fulfillment === "pickup" ? `自取：${result.order.pickupPointName}` : `宅配：${result.order.address}`;
-      const shopMsg =
-        `新訂單 ${result.order.code}\n` +
-        `${result.customer.lineName}${result.customer.verified ? "" : "（訪客）"}\n` +
-        `${result.order.recipient} ${result.order.phone}\n` +
-        `${how}` +
-        `${result.priorOrders > 0 ? `\n此客戶累計第 ${result.priorOrders + 1} 張單，請合併處理` : ""}\n` +
-        `${lines}\n合計 ${formatPrice(result.order.total)}`;
-      void pushLine(result.notifyTo, shopMsg);
-      if (result.customer.lineUserId) {
-        void pushLine(
-          result.customer.lineUserId,
-          `Radiant 已收到您的訂單 ${result.order.code}\n${how}\n${lines}\n合計 ${formatPrice(result.order.total)}\n我們會盡快與您確認。`
-        );
+    if (!result.replay) {
+      try {
+        await pushLine(result.notifyTo, staffOrderMessage(newOrderHeadline(result.order), result.order));
+      } catch {
+        console.error("line notify failed");
+      }
+      if (result.order.paymentMethod === "line" && result.customer.lineUserId) {
+        const lines = result.order.items.map((item) => `· ${item.name} ${variantLabel(item.color, item.size)} × ${item.qty}`).join("\n");
+        const how = result.order.fulfillment === "pickup" ? `自取：${result.order.pickupPointName}` : result.order.fulfillment === "cvs" ? "超商取貨" : `宅配：${result.order.address}`;
+        try {
+          await pushLine(
+            result.customer.lineUserId,
+            `Radiant 已收到您的訂單 ${result.order.code}\n${how}\n${lines}\n合計 ${formatPrice(result.order.total)}\n我們會盡快與您確認。`
+          );
+        } catch {
+          console.error("line notify failed");
+        }
       }
     }
     return { ok: true, order: result.order, customer: result.customer, replay: result.replay };
@@ -369,8 +435,7 @@ export type BeginPayment =
 
 /** Reserves a fresh MerchantOrderNo for one trip to the NewebPay page. */
 export async function beginPayment(code: string): Promise<BeginPayment> {
-  return mutate((store): BeginPayment => {
-    expireHolds(store);
+  const { value } = await mutateSettled((store): BeginPayment => {
     const order = store.orders.find((item) => item.code === code);
     if (!order) return { ok: false, error: "找不到訂單", status: 404 };
     if (order.paymentMethod === "line") return { ok: false, error: "這張訂單不需要線上付款", status: 400 };
@@ -387,11 +452,12 @@ export async function beginPayment(code: string): Promise<BeginPayment> {
     order.updatedAt = new Date(now).toISOString();
     return { ok: true, order: { ...order }, attempt: order.payAttempts };
   });
+  return value;
 }
 
 export type PaymentOutcome =
   | { kind: "ignored" }
-  | { kind: "failed"; order: Order }
+  | { kind: "failed"; order: Order; fresh: boolean }
   | { kind: "duplicate"; order: Order }
   | { kind: "mismatch"; order: Order }
   | { kind: "voucher"; order: Order; customer?: Customer }
@@ -409,12 +475,21 @@ function isConfirmed(order: Order): boolean {
  * Every branch is safe to run twice.
  */
 export async function applyPaymentNotice(notice: PaymentNotice): Promise<PaymentOutcome> {
-  const outcome = await mutate((store): PaymentOutcome => {
+  const { value: outcome } = await mutateSettled((store): PaymentOutcome => {
     const order = store.orders.find((item) => item.code === notice.code);
     if (!order || order.paymentMethod === "line") return { kind: "ignored" };
     const attempt = Number(notice.merchantOrderNo.split("_")[1]);
     if (!Number.isInteger(attempt) || attempt < 1 || attempt > order.payAttempts) return { kind: "ignored" };
-    if (!notice.success) return { kind: "failed", order };
+    if (!notice.success) {
+      if (order.status !== "pending" || order.paidAt || isConfirmed(order)) return { kind: "failed", order, fresh: false };
+      const key = `fail:${notice.merchantOrderNo}`;
+      const alerts = order.alerts ?? [];
+      if (alerts.includes(key)) return { kind: "failed", order, fresh: false };
+      order.alerts = [...alerts, key].slice(-20);
+      appendNote(order, `付款未成功（${notice.status || "失敗"}），庫存仍保留到付款期限`);
+      order.updatedAt = new Date().toISOString();
+      return { kind: "failed", order, fresh: true };
+    }
     const customer = store.customers.find((item) => item.id === order.customerId);
     const now = new Date().toISOString();
 
@@ -464,7 +539,7 @@ export async function applyPaymentNotice(notice: PaymentNotice): Promise<Payment
         if (order.paymentMethod === "online") order.paidAt = now;
         order.holdUntil = "";
         order.updatedAt = now;
-        appendNote(order, `訂單已取消但客戶仍完成了付款或選門市（藍新序號 ${notice.tradeNo}），${expiredByHold ? "庫存已不足，" : ""}請與客戶聯絡並退款或取消物流單`);
+        appendNote(order, `待人工處理：訂單已取消但客戶仍完成了付款或選門市（藍新序號 ${notice.tradeNo}），${expiredByHold ? "庫存已不足，" : ""}請與客戶聯絡並退款或取消物流單`);
         return { kind: "refund", order, customer };
       }
     } else if (wasConfirmed && !pickedUp) {
@@ -488,7 +563,11 @@ export async function applyPaymentNotice(notice: PaymentNotice): Promise<Payment
       : { kind: "confirmed", order, customer, revived };
   });
 
-  await notifyPayment(outcome);
+  try {
+    await notifyPayment(outcome);
+  } catch {
+    console.error("line notify failed");
+  }
   return outcome;
 }
 
@@ -497,44 +576,44 @@ function stripEmpty<T extends object>(value: T): Partial<T> {
 }
 
 async function notifyPayment(outcome: PaymentOutcome): Promise<void> {
-  if (outcome.kind === "ignored" || outcome.kind === "failed" || outcome.kind === "duplicate") return;
-  if (outcome.kind === "voucher") {
-    const { settings } = await getStore();
-    const order = outcome.order;
-    const how = order.payType === "VACC" ? "ATM 轉帳" : "超商代碼";
-    void pushLine(settings.notifyTo, `訂單 ${order.code} 已取得${how}繳費代碼，繳費期限 ${order.payExpire || "見後台"}\n${order.recipient}\n合計 ${formatPrice(order.total)}`);
-    return;
-  }
+  if (outcome.kind === "ignored" || outcome.kind === "duplicate") return;
+  if (outcome.kind === "failed" && !outcome.fresh) return;
   const { settings } = await getStore();
   const order = outcome.order;
+  const toShop = (headline: string) => pushLine(settings.notifyTo, staffOrderMessage(headline, order));
+
+  if (outcome.kind === "failed") {
+    await toShop("付款未成功");
+    return;
+  }
+  if (outcome.kind === "voucher") {
+    const how = order.payType === "VACC" ? "ATM 轉帳" : "超商代碼";
+    await toShop(`已取得${how}繳費代碼，期限 ${order.payExpire || "見後台"}`);
+    return;
+  }
+  if (outcome.kind === "mismatch") {
+    await toShop("付款金額不符，請到藍新後台確認");
+    return;
+  }
+  if (outcome.kind === "refund") {
+    await toShop("已付款，但庫存不足需人工處理");
+    return;
+  }
+  if (outcome.kind === "completed") {
+    await toShop("取貨付款已完成");
+    return;
+  }
+  const cod = order.paymentMethod === "cod";
+  await toShop(cod ? "新訂單（超商取貨付款）" : "已付款");
+  if (!outcome.customer?.lineUserId) return;
   const lines = order.items.map((item) => `· ${item.name} ${variantLabel(item.color, item.size)} × ${item.qty}`).join("\n");
   const how = order.fulfillment === "cvs"
     ? `超商取貨：${order.cvs ? `${order.cvs.storeType} ${order.cvs.storeName}`.trim() : "（門市資料待確認）"}`
     : order.fulfillment === "pickup"
       ? `自取：${order.pickupPointName}`
       : `宅配：${order.address}`;
-  const method = paymentLabel(order.paymentMethod, order.fulfillment);
-  const toShop = (headline: string, extra = "") =>
-    pushLine(settings.notifyTo, `${headline} ${order.code}\n${order.recipient} ${order.phone}\n${method}\n${how}${extra}\n${lines}\n合計 ${formatPrice(order.total)}`);
-
-  if (outcome.kind === "mismatch") {
-    void toShop("付款金額不符，請至藍新後台確認");
-    return;
-  }
-  if (outcome.kind === "refund") {
-    void toShop("訂單已取消但客戶完成付款，請聯絡客戶並退款");
-    return;
-  }
-  if (outcome.kind === "completed") {
-    void toShop("取貨付款已完成");
-    return;
-  }
-  const cod = order.paymentMethod === "cod";
-  void toShop(cod ? "新訂單（超商取貨付款）" : "新訂單（已付款）", order.cvs?.lgsNo ? `\n寄件代碼 ${order.cvs.lgsNo}` : "");
-  if (outcome.customer?.lineUserId) {
-    void pushLine(
-      outcome.customer.lineUserId,
-      `Radiant 已收到您的訂單 ${order.code}\n${cod ? "取貨時於門市付款" : "已完成付款"}\n${how}\n${lines}\n合計 ${formatPrice(order.total)}\n商品出貨後會再通知您。`
-    );
-  }
+  await pushLine(
+    outcome.customer.lineUserId,
+    `Radiant 已收到您的訂單 ${order.code}\n${cod ? "取貨時於門市付款" : "已完成付款"}\n${how}\n${lines}\n合計 ${formatPrice(order.total)}\n商品出貨後會再通知您。`
+  );
 }

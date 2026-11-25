@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { getStore } from "@/lib/store";
-import { beginPayment } from "@/lib/orders";
+import { beginPayment, readSettledStore } from "@/lib/orders";
 import { PaymentRequestError, buildCheckoutPayload, newebpayConfig } from "@/lib/newebpay";
 import { canViewOrder } from "@/lib/order-access";
 import { clientIp, sameOrigin } from "@/lib/http";
@@ -18,7 +17,7 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as { code?: unknown; token?: unknown } | null;
   const code = typeof body?.code === "string" ? body.code.slice(0, 40) : "";
   const token = typeof body?.token === "string" ? body.token.slice(0, 80) : undefined;
-  const { orders, customers } = await getStore();
+  const { orders, customers } = await readSettledStore();
   const existing = orders.find((order) => order.code === code);
   if (!existing || !(await canViewOrder(existing, customers, token))) {
     return NextResponse.json({ error: "找不到訂單" }, { status: 404 });

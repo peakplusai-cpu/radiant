@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getStore } from "@/lib/store";
+import { readSettledStore } from "@/lib/orders";
 import { variantPrice } from "@/lib/products";
 import { effectiveCategories } from "@/lib/categories";
 import { getLineIdentity } from "@/lib/line";
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
 
   const entries = Array.isArray(body.items) ? body.items.slice(0, 50) : [];
   const fulfillment: Fulfillment = body.fulfillment === "pickup" || body.fulfillment === "cvs" ? body.fulfillment : "delivery";
-  const { products, settings, promotions, promoUses, promoClaims } = await getStore();
+  const { products, settings, promotions, promoUses, promoClaims } = await readSettledStore();
   const session = await getLineIdentity();
 
   const lines = entries.flatMap((entry) => {

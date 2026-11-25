@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { adminAccessDecision } from "@/lib/admin-access";
 import { parseCheckoutBody, resolveCheckoutIdentity } from "@/lib/checkout";
 import { securityHeaderPairs } from "@/lib/http";
+import { SUPABASE_PROJECT_HOST, supabaseStorageHost } from "@/lib/supabase-host";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { safeEqual, sign, verifyAdminToken } from "@/lib/session-token";
 import { safeNext } from "@/lib/line";
@@ -81,10 +82,28 @@ describe("redirects, headers, passwords, cart", () => {
     expect(headers.get("X-Content-Type-Options")).toBe("nosniff");
     expect(headers.get("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
     expect(headers.get("Content-Security-Policy")).toContain("frame-ancestors 'none'");
-    expect(headers.get("Content-Security-Policy")).toContain("https://*.supabase.co");
+    const host = supabaseStorageHost();
+    expect(headers.get("Content-Security-Policy")).toContain(`img-src 'self' data: blob: https://${host}`);
+    expect(headers.get("Content-Security-Policy")).not.toContain("*.supabase.co");
     expect(headers.get("Content-Security-Policy")).toContain("form-action 'self' https://ccore.newebpay.com https://core.newebpay.com");
     expect(headers.get("Permissions-Policy")).toContain("camera=()");
     expect(headers.get("Strict-Transport-Security")).toContain("max-age=");
+  });
+
+  it("pins image hosts to this project's Supabase hostname", () => {
+    const prev = process.env.SUPABASE_URL;
+    const prevPublic = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    delete process.env.SUPABASE_URL;
+    delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    expect(supabaseStorageHost()).toBe(SUPABASE_PROJECT_HOST);
+    process.env.SUPABASE_URL = "https://wgrwwuyxhdyakchuiubi.supabase.co";
+    expect(supabaseStorageHost()).toBe("wgrwwuyxhdyakchuiubi.supabase.co");
+    process.env.SUPABASE_URL = "https://other-project.supabase.co/rest/v1";
+    expect(supabaseStorageHost()).toBe("other-project.supabase.co");
+    if (prev === undefined) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = prev;
+    if (prevPublic === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    else process.env.NEXT_PUBLIC_SUPABASE_URL = prevPublic;
   });
 
   it("hashes passwords and serializes cart clicks", () => {

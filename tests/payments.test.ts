@@ -320,6 +320,7 @@ describe("online payment and pay-at-pickup orders", () => {
     const { applyPaymentNotice, beginPayment } = await import("@/lib/orders");
     const { getStore } = await import("@/lib/store");
     const order = await place();
+    const expireDate = new Date(Date.now() + 4 * 24 * 3600_000).toISOString().slice(0, 10);
     const numbered = await applyPaymentNotice(notice({
       code: order.code,
       amt: order.total,
@@ -327,14 +328,14 @@ describe("online payment and pay-at-pickup orders", () => {
       payTime: "",
       bankCode: "004",
       codeNo: "99887766",
-      expireDate: "2026-11-19",
+      expireDate,
       tradeNo: "VACC1",
     }));
     expect(numbered.kind).toBe("voucher");
     let saved = (await getStore()).orders.find((item) => item.code === order.code);
     expect(saved).toMatchObject({ status: "pending", payCodeNo: "99887766", payBankCode: "004", paidAt: "" });
     expect(Date.parse(saved?.holdUntil ?? "")).toBeGreaterThan(Date.now() + 24 * 3600_000);
-    expect((await applyPaymentNotice(notice({ code: order.code, amt: order.total, paymentType: "VACC", payTime: "", bankCode: "004", codeNo: "99887766", expireDate: "2026-11-19", tradeNo: "VACC1" }))).kind).toBe("duplicate");
+    expect((await applyPaymentNotice(notice({ code: order.code, amt: order.total, paymentType: "VACC", payTime: "", bankCode: "004", codeNo: "99887766", expireDate, tradeNo: "VACC1" }))).kind).toBe("duplicate");
     expect((await beginPayment(order.code)).ok).toBe(false);
 
     const paid = await applyPaymentNotice(notice({ code: order.code, amt: order.total, paymentType: "VACC", tradeNo: "VACC1" }));

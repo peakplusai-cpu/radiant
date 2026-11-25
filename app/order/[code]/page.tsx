@@ -6,10 +6,11 @@ import { OrderReceipt } from "@/components/OrderReceipt";
 import { OrderLink } from "@/components/OrderLink";
 import { PaymentWait } from "@/components/PaymentWait";
 import { officialLineHref } from "@/lib/line-link";
-import { getStore } from "@/lib/store";
+import { readSettledStore } from "@/lib/orders";
 import { canViewOrder } from "@/lib/order-access";
 import { PayButton } from "@/components/PayButton";
 import { paymentOptions } from "@/lib/newebpay";
+import { DEFAULT_PAYMENT_NOTE, LEGACY_PAYMENT_NOTE } from "@/lib/business";
 import { awaitingCustomer, holdExpired, onlineEnabled } from "@/lib/payment";
 import { formatPrice } from "@/lib/format";
 
@@ -25,7 +26,7 @@ export default async function OrderPage({
 }) {
   const { code } = await params;
   const { t, pay } = await searchParams;
-  const { orders, customers, settings } = await getStore();
+  const { orders, customers, settings } = await readSettledStore();
   const order = orders.find((o) => o.code === code);
   if (!order) notFound();
 
@@ -104,7 +105,9 @@ export default async function OrderPage({
         )}
         <OrderLink code={order.code} token={order.token} />
         <OrderReceipt order={order} />
-        {order.paymentMethod === "line" && settings.paymentNote && <div className="notice" style={{ marginBottom: 20 }}>{settings.paymentNote}</div>}
+        {order.paymentMethod === "line" && settings.paymentNote && settings.paymentNote !== LEGACY_PAYMENT_NOTE && settings.paymentNote !== DEFAULT_PAYMENT_NOTE && (
+          <div className="notice" style={{ marginBottom: 20 }}>{settings.paymentNote}</div>
+        )}
         {officialLineHref(settings) && (
           <div className="notice" style={{ marginBottom: 20 }}>
             請加入{settings.lineOaName ? `「${settings.lineOaName}」` : "我們的 LINE 官方帳號"}，以便收到訂單通知。{" "}

@@ -1509,6 +1509,16 @@ h3 {
   color: var(--teal-deep);
 }
 
+.footer-business {
+  padding-bottom: 28px;
+}
+
+.footer-business ul {
+  display: grid;
+  gap: 2px;
+  max-width: 42em;
+}
+
 .footer-base {
   display: flex;
   justify-content: space-between;
